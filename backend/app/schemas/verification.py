@@ -20,6 +20,7 @@ class VerificationIssuerInfo(BaseModel):
 
 class VerifyCredentialResponse(BaseModel):
     is_valid: bool
+    outcome: str = Field(default="VALID", description="Verification outcome: VALID, INVALID, or INDETERMINATE")
     checks: VerificationChecks
     lifecycle_status: str
     issuer: VerificationIssuerInfo

@@ -39,11 +39,26 @@ async def readiness_probe(db: AsyncSession = Depends(get_db)) -> ReadinessStatus
         ),
     }
 
-    is_ready = db_status["status"] == "healthy"
+    # 3. Storage readiness
+    storage_status = {"status": "healthy"}
+    try:
+        import os
+        test_path = os.path.join(settings.STORAGE_DIR, ".health_check")
+        os.makedirs(settings.STORAGE_DIR, exist_ok=True)
+        with open(test_path, "w") as f:
+            f.write("ok")
+        if os.path.exists(test_path):
+            os.remove(test_path)
+    except Exception as e:
+        logger.error(f"Readiness probe: Storage check failed: {e}")
+        storage_status = {"status": "unhealthy", "error": str(e)}
+
+    is_ready = db_status["status"] == "healthy" and storage_status["status"] == "healthy"
     return ReadinessStatus(
         status="ready" if is_ready else "not_ready",
         environment=settings.ENVIRONMENT,
         database=db_status,
         blockchain=blockchain_status,
+        storage=storage_status,
         timestamp=datetime.datetime.now(datetime.timezone.utc).isoformat(),
     )

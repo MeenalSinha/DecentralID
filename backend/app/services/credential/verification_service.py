@@ -13,6 +13,7 @@ from backend.app.core.constants import CredentialLifecycleStatus, SigningKeyStat
 class VerificationResult:
     def __init__(self):
         self.is_valid: bool = False
+        self.outcome: str = "INDETERMINATE"
         self.structural_valid: bool = False
         self.signature_valid: bool = False
         self.issuer_authorized: bool = False
@@ -33,6 +34,7 @@ class VerificationResult:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "is_valid": self.is_valid,
+            "outcome": self.outcome,
             "checks": {
                 "structural": self.structural_valid,
                 "signature": self.signature_valid,
@@ -86,8 +88,16 @@ class VerificationService:
             target_doc = vcs[0]
             if "selectiveDisclosure" in target_doc:
                 result.is_selective_disclosure = True
+                sel_disc = target_doc.get("selectiveDisclosure", {})
+                proof = sel_disc.get("disclosureProof")
+                root_commit = sel_disc.get("claimsRootCommitment")
+                if proof and root_commit:
+                    from backend.app.services.credential.selective_disclosure_service import SelectiveDisclosureService
+                    is_sd_ok, verified_claims, sd_err = SelectiveDisclosureService.verify_selective_disclosure(proof, root_commit)
+                    if not is_sd_ok:
+                        result.errors.append(f"Selective disclosure verification failed: {sd_err}")
                 if not salt:
-                    salt_hex = target_doc.get("selectiveDisclosure", {}).get("salt")
+                    salt_hex = sel_disc.get("salt")
                     if salt_hex:
                         clean_hex = salt_hex[2:] if salt_hex.startswith("0x") else salt_hex
                         try:
@@ -281,5 +291,14 @@ class VerificationService:
             and result.lifecycle_status == "ACTIVE"
             and len(result.errors) == 0
         )
+
+        if result.is_valid:
+            result.outcome = "VALID"
+        elif not result.signature_valid or result.lifecycle_status in ["REVOKED", "SUSPENDED"] or not result.not_expired:
+            result.outcome = "INVALID"
+        elif any("cannot be verified" in e.lower() or "not found in local accredited" in w.lower() for e in result.errors for w in result.warnings) or db is None:
+            result.outcome = "INDETERMINATE"
+        else:
+            result.outcome = "INVALID"
 
         return result

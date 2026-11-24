@@ -68,3 +68,5 @@ __pycache__/
 *.tgz
 .npm
 .eslintcache
+storage/
+sdk/typescript/dist/

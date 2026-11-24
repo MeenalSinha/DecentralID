@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     CREDENTIAL_REGISTRY_ADDRESS: Optional[str] = Field(default=None)
     CREDENTIAL_STATUS_REGISTRY_ADDRESS: Optional[str] = Field(default=None)
 
+    # Storage & IPFS Network
+    PINATA_JWT: Optional[str] = Field(default=None)
+    PINATA_GATEWAY: str = Field(default="https://gateway.pinata.cloud/ipfs")
+    STORAGE_DIR: str = Field(default="storage")
+
     # CORS
     CORS_ORIGINS: List[str] = Field(
         default=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000"]
@@ -59,10 +64,29 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_production_security(self) -> "Settings":
         if self.ENVIRONMENT.lower() == "production":
-            if "default-development" in self.SECRET_KEY or len(self.SECRET_KEY) < 32:
+            insecure_placeholders = [
+                "default-development",
+                "change-in-prod",
+                "decentralid_dev_secret",
+                "decentralid_secure_dev",
+                "your_32_byte_hex",
+                "your_wallet_private_key",
+            ]
+            for placeholder in insecure_placeholders:
+                if placeholder in self.SECRET_KEY.lower():
+                    raise ValueError(f"In production, SECRET_KEY must be a cryptographically secure random value and cannot contain development placeholder '{placeholder}'.")
+            if len(self.SECRET_KEY) < 32:
                 raise ValueError("In production, SECRET_KEY must be a cryptographically secure random value with at least 32 characters.")
             if not self.SECURE_COOKIE:
                 raise ValueError("In production, SECURE_COOKIE must be enabled (True) for HTTPS security.")
+            if self.CREDENTIAL_ENCRYPTION_KEY:
+                for placeholder in insecure_placeholders:
+                    if placeholder in self.CREDENTIAL_ENCRYPTION_KEY.lower():
+                        raise ValueError(f"In production, CREDENTIAL_ENCRYPTION_KEY cannot contain development placeholder '{placeholder}'.")
+                if len(self.CREDENTIAL_ENCRYPTION_KEY) < 32:
+                    raise ValueError("In production, CREDENTIAL_ENCRYPTION_KEY must be at least 32 characters.")
+            if "decentralid_secure_dev_password" in self.DATABASE_URL:
+                raise ValueError("In production, DATABASE_URL must not use the development fallback password.")
         return self
 
 settings = Settings()

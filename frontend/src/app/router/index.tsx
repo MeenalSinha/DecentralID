@@ -3,6 +3,7 @@ import { AppLayout } from '../../components/layout/AppLayout';
 import { VerificationView } from '../../features/verification/components/VerificationView';
 import { WalletView } from '../../features/wallet/components/WalletView';
 import { IssuerView } from '../../features/issuers/components/IssuerView';
+import { IntelligenceView } from '../../features/intelligence/components/IntelligenceView';
 
 export const router = createBrowserRouter([
   {
@@ -20,6 +21,10 @@ export const router = createBrowserRouter([
       {
         path: 'issuer',
         element: <IssuerView />,
+      },
+      {
+        path: 'intelligence',
+        element: <IntelligenceView />,
       },
     ],
   },

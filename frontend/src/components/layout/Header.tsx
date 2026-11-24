@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Shield, CheckCircle, Building, Wallet } from 'lucide-react';
+import { Shield, CheckCircle, Building, Wallet, Brain } from 'lucide-react';
 
 interface HeaderProps {
   account: string | null;
@@ -23,6 +23,7 @@ export const Header: React.FC<HeaderProps> = ({
     { to: '/', label: 'Verify', icon: CheckCircle },
     { to: '/wallet', label: 'My Wallet', icon: Wallet },
     { to: '/issuer', label: 'Institutions', icon: Building },
+    { to: '/intelligence', label: 'Intelligence', icon: Brain },
   ];
 
   return (

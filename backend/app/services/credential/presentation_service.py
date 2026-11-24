@@ -11,6 +11,7 @@ from backend.app.core.config import settings
 from backend.app.core.exceptions import ResourceNotFoundException, ValidationException, TenantAccessDeniedException
 from backend.app.services.credential.encryption_service import EncryptionService
 from backend.app.services.credential.signing_service import SigningService
+from backend.app.services.credential.selective_disclosure_service import SelectiveDisclosureService
 from backend.app.schemas.presentation import VerifiablePresentationResponse
 
 class PresentationService:
@@ -91,6 +92,14 @@ class PresentationService:
         presented_subject = {"id": f"did:pkh:eip155:{settings.CHAIN_ID}:{holder_norm}"}
         presented_subject.update(disclosed_claims)
 
+        # Compute genuine cryptographic selective disclosure proof
+        claim_salts, claim_digests, root_commitment = SelectiveDisclosureService.create_blinded_claims(full_subject)
+        disclosure_proof = SelectiveDisclosureService.generate_disclosure_proof(
+            full_claims=full_subject,
+            claim_salts=claim_salts,
+            disclosed_keys=list(disclosed_claims.keys()),
+        )
+
         # Construct Verifiable Credential item for the presentation
         presented_vc = {
             "@context": [
@@ -112,12 +121,11 @@ class PresentationService:
             },
             "commitment": cred.commitment,
             "selectiveDisclosure": {
-                "originalCommitment": cred.commitment,
+                "cryptographicMode": "SaltedClaimCommitment",
+                "claimsRootCommitment": root_commitment,
                 "disclosedFields": list(disclosed_claims.keys()),
                 "maskedFields": masked_claims,
-                # NOTE: salt is intentionally omitted from VP document.
-                # It is a server-side commitment secret and must never be transmitted
-                # to the verifier. The verifier uses the commitment hash directly.
+                "disclosureProof": disclosure_proof,
             },
             "proof": proof_obj,
         }

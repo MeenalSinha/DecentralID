@@ -12,6 +12,7 @@ from backend.app.schemas.credential import (
     PrepareCredentialRequest,
     PrepareCredentialResponse,
     SignCredentialRequest,
+    CompleteSigningRequest,
     ConfirmIssuanceRequest,
     CredentialSummary,
     CredentialListResponse,
@@ -131,6 +132,52 @@ async def approve_credential(
 ):
     cred = await IssuanceService.approve_credential(db, credential_id, current_user.id)
     return {"status": "approved", "workflow_status": cred.workflow_status, "approved_by": cred.approved_by}
+
+@router.get("/{credential_id}/signing-payload", status_code=status.HTTP_200_OK)
+async def get_signing_payload(
+    credential_id: str,
+    signer_address: str = Query(..., pattern="^0x[a-fA-F0-9]{40}$", description="Operational signer address"),
+    cryptosuite: str = Query("ecdsa-jcs-2019", description="Cryptographic suite"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Returns the canonical unsigned W3C document and 32-byte digest for client-side wallet signing.
+    Zero private key material is required on the backend.
+    """
+    payload = await IssuanceService.get_signing_payload(
+        db=db,
+        credential_record_id=credential_id,
+        operator_user_id=current_user.id,
+        signer_address=signer_address,
+        cryptosuite=cryptosuite,
+    )
+    return payload
+
+@router.post("/{credential_id}/complete-signing", status_code=status.HTTP_200_OK)
+async def complete_signing(
+    credential_id: str,
+    payload: CompleteSigningRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Receives an externally generated signature from client wallet or KMS,
+    verifies it against authorized keys, and finalizes issuance without private key transmission.
+    """
+    cred, signed_vc = await IssuanceService.complete_signing_with_signature(
+        db=db,
+        credential_record_id=credential_id,
+        signature=payload.signature,
+        signer_address=payload.signer_address,
+        operator_user_id=current_user.id,
+        cryptosuite=payload.cryptosuite or "ecdsa-jcs-2019",
+    )
+    return {
+        "status": "signed",
+        "workflow_status": cred.workflow_status,
+        "credential": signed_vc,
+    }
 
 @router.post("/{credential_id}/sign", status_code=status.HTTP_200_OK)
 async def sign_credential(

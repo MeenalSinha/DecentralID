@@ -12,4 +12,5 @@ class ReadinessStatus(BaseModel):
     environment: str
     database: Dict[str, Any]
     blockchain: Dict[str, Any]
+    storage: Optional[Dict[str, Any]] = None
     timestamp: str

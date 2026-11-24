@@ -14,6 +14,10 @@ from backend.app.api.routes.users import router as users_router
 from backend.app.api.routes.credentials import router as credentials_router
 from backend.app.api.routes.verification import router as verification_router
 from backend.app.api.routes.credential_lifecycle import router as lifecycle_router
+from backend.app.api.routes.intelligence import router as intelligence_router
+from backend.app.api.routes.developer_api import router as developer_api_router
+from backend.app.api.routes.webhooks import router as webhooks_router
+from backend.app.api.routes.analytics import router as analytics_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -55,3 +59,7 @@ app.include_router(users_router, prefix=settings.API_V1_STR)
 app.include_router(credentials_router, prefix=settings.API_V1_STR)
 app.include_router(verification_router, prefix=settings.API_V1_STR)
 app.include_router(lifecycle_router, prefix=settings.API_V1_STR)
+app.include_router(intelligence_router, prefix=settings.API_V1_STR)
+app.include_router(developer_api_router, prefix=settings.API_V1_STR)
+app.include_router(webhooks_router, prefix=settings.API_V1_STR)
+app.include_router(analytics_router, prefix=settings.API_V1_STR)

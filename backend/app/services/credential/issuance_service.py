@@ -164,6 +164,134 @@ class IssuanceService:
         return cred, signed_vc
 
     @staticmethod
+    async def get_signing_payload(
+        db: AsyncSession,
+        credential_record_id: str,
+        operator_user_id: str,
+        signer_address: str,
+        cryptosuite: str = "ecdsa-jcs-2019",
+    ) -> Dict[str, Any]:
+        """
+        Builds the canonical unsigned W3C document and signing digest for client-side wallet signing.
+        Zero private key material is required on the backend.
+        """
+        stmt = select(Credential).where((Credential.id == credential_record_id) | (Credential.credential_id == credential_record_id))
+        res = await db.execute(stmt)
+        cred = res.scalar_one_or_none()
+        if not cred:
+            raise ResourceNotFoundException("Credential record not found.")
+
+        has_perm = await AuthorizationService.has_organization_role(
+            db, operator_user_id, cred.organization_id, ["ADMIN", "AUTHORIZED_ISSUER"]
+        )
+        if not has_perm:
+            raise TenantAccessDeniedException("Not authorized to sign credentials for this organization.")
+
+        if cred.workflow_status not in [CredentialWorkflowStatus.APPROVED.value]:
+            raise InvalidStatusTransitionException(f"Cannot sign credential with status '{cred.workflow_status}'. Expected 'APPROVED'.")
+
+        # Fetch organization
+        org_stmt = select(Organization).where(Organization.id == cred.organization_id)
+        org_res = await db.execute(org_stmt)
+        org = org_res.scalar_one()
+
+        # Decrypt subject
+        full_subject = EncryptionService.decrypt_json(cred.encrypted_subject)
+
+        w3c_doc = {
+            "@context": [
+                "https://www.w3.org/ns/credentials/v2",
+                "https://decentralid.org/contexts/v1",
+            ],
+            "id": cred.w3c_id,
+            "type": ["VerifiableCredential", cred.schema_type],
+            "issuer": {
+                "id": f"did:pkh:eip155:{settings.CHAIN_ID}:{org.on_chain_address.lower()}",
+                "name": org.name,
+            },
+            "validFrom": cred.created_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "credentialSubject": full_subject,
+        }
+        if cred.valid_until:
+            w3c_doc["validUntil"] = cred.valid_until.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        verification_method = f"did:pkh:eip155:{settings.CHAIN_ID}:{signer_address.lower()}#key-1"
+
+        proof_options, digest = SigningService.create_proof_payload(
+            document_without_proof=w3c_doc,
+            verification_method=verification_method,
+            created_at=cred.created_at,
+            cryptosuite=cryptosuite,
+        )
+
+        return {
+            "credential_id": cred.credential_id,
+            "document": w3c_doc,
+            "proof_options": proof_options,
+            "verification_method": verification_method,
+            "signing_digest": "0x" + digest.hex(),
+            "cryptosuite": cryptosuite,
+        }
+
+    @staticmethod
+    async def complete_signing_with_signature(
+        db: AsyncSession,
+        credential_record_id: str,
+        signature: str,
+        signer_address: str,
+        operator_user_id: str,
+        cryptosuite: str = "ecdsa-jcs-2019",
+    ) -> Tuple[Credential, Dict[str, Any]]:
+        """
+        Receives an externally generated ECDSA signature (from MetaMask, Hardware Wallet, or KMS),
+        authenticates the signer, and finalizes the verifiable credential.
+        """
+        stmt = select(Credential).where((Credential.id == credential_record_id) | (Credential.credential_id == credential_record_id))
+        res = await db.execute(stmt)
+        cred = res.scalar_one_or_none()
+        if not cred:
+            raise ResourceNotFoundException("Credential record not found.")
+
+        has_perm = await AuthorizationService.has_organization_role(
+            db, operator_user_id, cred.organization_id, ["ADMIN", "AUTHORIZED_ISSUER"]
+        )
+        if not has_perm:
+            raise TenantAccessDeniedException("Not authorized to sign credentials for this organization.")
+
+        if cred.workflow_status not in [CredentialWorkflowStatus.APPROVED.value]:
+            raise InvalidStatusTransitionException(f"Cannot sign credential with status '{cred.workflow_status}'. Expected 'APPROVED'.")
+
+        # Get payload
+        payload = await IssuanceService.get_signing_payload(
+            db, credential_record_id, operator_user_id, signer_address, cryptosuite
+        )
+
+        signed_vc = SigningService.assemble_signed_credential(
+            credential_doc=payload["document"],
+            proof_options=payload["proof_options"],
+            signature=signature,
+        )
+
+        # Independently verify the assembled proof before persisting
+        is_valid, recovered, error = SigningService.verify_credential_proof(signed_vc)
+        if not is_valid:
+            raise ValidationException(f"Cryptographic signature verification failed: {error}")
+
+        cred.proof_json = json.dumps(signed_vc["proof"])
+        cred.workflow_status = CredentialWorkflowStatus.PENDING_BLOCKCHAIN_REGISTRATION.value
+
+        job = IssuanceJob(
+            credential_id=cred.id,
+            organization_id=cred.organization_id,
+            status=IssuanceJobStatus.PENDING.value,
+        )
+        db.add(job)
+        await db.commit()
+        await db.refresh(cred)
+
+        return cred, signed_vc
+
+    @staticmethod
     async def confirm_blockchain_registration(
         db: AsyncSession,
         credential_record_id: str,

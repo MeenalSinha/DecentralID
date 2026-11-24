@@ -40,7 +40,10 @@ class AuthorizationService:
         membership = await AuthorizationService.get_membership(db, user_id, organization_id)
         if not membership:
             return False
-        return membership.role in required_roles
+        normalized_roles = set(required_roles)
+        if "ADMIN" in normalized_roles:
+            normalized_roles.add(UserRole.INSTITUTION_ADMIN.value)
+        return membership.role in normalized_roles
 
     @staticmethod
     async def verify_tenant_access(

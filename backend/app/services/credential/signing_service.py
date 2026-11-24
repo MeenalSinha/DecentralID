@@ -1,3 +1,4 @@
+import hashlib
 import datetime
 from typing import Dict, Any, Tuple
 from eth_account import Account
@@ -8,11 +9,12 @@ from backend.app.services.credential.canonicalization import CanonicalizationSer
 class SigningService:
     """
     W3C Verifiable Credentials Data Model 2.0 & Data Integrity 1.0 Proof Signing Engine.
-    Implements the ecdsa-jcs-2019 cryptosuite using secp256k1 curves.
-    Produces and independently validates tamper-evident cryptographic proofs.
+    Implements standards-compliant ecdsa-jcs-2019 (SHA-256 + RFC 8785 JCS)
+    along with backward-compatible verification for legacy profiles.
     """
 
-    CRYPTOSUITE = "ecdsa-jcs-2019"
+    CRYPTOSUITE_STANDARD = "ecdsa-jcs-2019"
+    CRYPTOSUITE_LEGACY = "ecdsa-jcs-2019-keccak"
     PROOF_TYPE = "DataIntegrityProof"
     PROOF_PURPOSE = "assertionMethod"
 
@@ -22,9 +24,11 @@ class SigningService:
         document_without_proof: Dict[str, Any],
         verification_method: str,
         created_at: datetime.datetime = None,
+        cryptosuite: str = "ecdsa-jcs-2019",
     ) -> Tuple[Dict[str, Any], bytes]:
         """
-        Builds the proof options and calculates the preimage hash for signing.
+        Builds the proof options and calculates the preimage digest for signing.
+        Uses SHA-256 for standard W3C ecdsa-jcs-2019, or Keccak-256 for legacy.
         Returns (proof_options_dict, digest_bytes).
         """
         if not created_at:
@@ -35,7 +39,7 @@ class SigningService:
 
         proof_options = {
             "type": cls.PROOF_TYPE,
-            "cryptosuite": cls.CRYPTOSUITE,
+            "cryptosuite": cryptosuite,
             "created": created_str,
             "verificationMethod": verification_method,
             "proofPurpose": cls.PROOF_PURPOSE,
@@ -45,10 +49,40 @@ class SigningService:
         canonical_doc = CanonicalizationService.canonicalize(document_without_proof)
         canonical_options = CanonicalizationService.canonicalize(proof_options)
 
-        # Preimage is proof options hash + document hash
-        preimage = keccak(canonical_options) + keccak(canonical_doc)
-        digest = keccak(preimage)
+        if cryptosuite == cls.CRYPTOSUITE_STANDARD:
+            # W3C Data Integrity 1.0 ecdsa-jcs-2019: SHA-256(SHA-256(options) || SHA-256(doc))
+            h_options = hashlib.sha256(canonical_options).digest()
+            h_doc = hashlib.sha256(canonical_doc).digest()
+            digest = hashlib.sha256(h_options + h_doc).digest()
+        else:
+            # Legacy Keccak-256 profile
+            preimage = keccak(canonical_options) + keccak(canonical_doc)
+            digest = keccak(preimage)
+
         return proof_options, digest
+
+    @classmethod
+    def assemble_signed_credential(
+        cls,
+        credential_doc: Dict[str, Any],
+        proof_options: Dict[str, Any],
+        signature: str,
+    ) -> Dict[str, Any]:
+        """
+        Assembles a complete W3C VC from a client-side wallet or KMS signature.
+        Never requires the private key to reach the backend application server.
+        """
+        doc_copy = {k: v for k, v in credential_doc.items() if k != "proof"}
+        sig = signature if signature.startswith("0x") else f"0x{signature}"
+
+        complete_proof = {
+            **proof_options,
+            "proofValue": sig,
+        }
+        return {
+            **doc_copy,
+            "proof": complete_proof,
+        }
 
     @classmethod
     def sign_credential(
@@ -57,6 +91,7 @@ class SigningService:
         private_key: str,
         verification_method: str,
         created_at: datetime.datetime = None,
+        cryptosuite: str = "ecdsa-jcs-2019",
     ) -> Dict[str, Any]:
         """
         Signs a W3C credential document using an operational signing key.
@@ -67,24 +102,15 @@ class SigningService:
             document_without_proof=doc_copy,
             verification_method=verification_method,
             created_at=created_at,
+            cryptosuite=cryptosuite,
         )
 
         account = Account.from_key(private_key)
-        # Sign digest using Ethereum signable message wrapper for compatibility
         signable = encode_defunct(primitive=digest)
         signed = account.sign_message(signable)
         proof_value = "0x" + signed.signature.hex()
 
-        complete_proof = {
-            **proof_options,
-            "proofValue": proof_value,
-        }
-
-        signed_credential = {
-            **doc_copy,
-            "proof": complete_proof,
-        }
-        return signed_credential
+        return cls.assemble_signed_credential(doc_copy, proof_options, proof_value)
 
     @classmethod
     def verify_credential_proof(
@@ -93,6 +119,7 @@ class SigningService:
     ) -> Tuple[bool, str, str]:
         """
         Independently verifies the W3C Data Integrity proof on a credential.
+        Supports both standard SHA-256 ecdsa-jcs-2019 and legacy Keccak-256 profiles.
         Returns (is_valid, recovered_signer_address, error_reason).
         """
         if not isinstance(credential, dict):
@@ -107,8 +134,8 @@ class SigningService:
             return False, "", f"Unsupported proof type '{proof_type}'. Expected '{cls.PROOF_TYPE}'."
 
         cryptosuite = proof.get("cryptosuite")
-        if cryptosuite != cls.CRYPTOSUITE:
-            return False, "", f"Unsupported cryptosuite '{cryptosuite}'. Expected '{cls.CRYPTOSUITE}'."
+        if cryptosuite not in (cls.CRYPTOSUITE_STANDARD, cls.CRYPTOSUITE_LEGACY):
+            return False, "", f"Unsupported cryptosuite '{cryptosuite}'."
 
         verification_method = proof.get("verificationMethod", "")
         if not verification_method:
@@ -118,23 +145,13 @@ class SigningService:
         if not proof_value or not proof_value.startswith("0x"):
             return False, "", "Proof is missing a valid 'proofValue' signature."
 
-        # Reconstruct canonical doc and proof options
         doc_copy = {k: v for k, v in credential.items() if k != "proof"}
         proof_options = {k: v for k, v in proof.items() if k != "proofValue"}
 
         canonical_doc = CanonicalizationService.canonicalize(doc_copy)
         canonical_options = CanonicalizationService.canonicalize(proof_options)
 
-        preimage = keccak(canonical_options) + keccak(canonical_doc)
-        digest = keccak(preimage)
-
-        try:
-            signable = encode_defunct(primitive=digest)
-            recovered_signer = Account.recover_message(signable, signature=proof_value)
-        except Exception as e:
-            return False, "", f"Signature recovery failed: {str(e)}"
-
-        # Parse expected address from verificationMethod (did:pkh:eip155:<chainId>:<address>#key-1)
+        # Parse expected address from verificationMethod
         expected_address = ""
         if "did:pkh:eip155:" in verification_method:
             parts = verification_method.split(":")
@@ -145,7 +162,28 @@ class SigningService:
         elif verification_method.startswith("0x"):
             expected_address = verification_method.split("#")[0]
 
-        if expected_address and recovered_signer.lower() != expected_address.lower():
-            return False, recovered_signer, f"Signer address '{recovered_signer}' does not match verificationMethod '{expected_address}'."
+        # 1. Standard SHA-256 verification
+        h_options = hashlib.sha256(canonical_options).digest()
+        h_doc = hashlib.sha256(canonical_doc).digest()
+        std_digest = hashlib.sha256(h_options + h_doc).digest()
 
-        return True, recovered_signer, ""
+        try:
+            signable_std = encode_defunct(primitive=std_digest)
+            recovered_signer = Account.recover_message(signable_std, signature=proof_value)
+            if not expected_address or recovered_signer.lower() == expected_address.lower():
+                return True, recovered_signer, ""
+        except Exception:
+            pass
+
+        # 2. Backward compatibility: Keccak-256 verification
+        preimage_legacy = keccak(canonical_options) + keccak(canonical_doc)
+        legacy_digest = keccak(preimage_legacy)
+
+        try:
+            signable_legacy = encode_defunct(primitive=legacy_digest)
+            recovered_signer = Account.recover_message(signable_legacy, signature=proof_value)
+            if not expected_address or recovered_signer.lower() == expected_address.lower():
+                return True, recovered_signer, ""
+            return False, recovered_signer, f"Signer address '{recovered_signer}' does not match verificationMethod '{expected_address}'."
+        except Exception as e:
+            return False, "", f"Signature recovery failed: {str(e)}"

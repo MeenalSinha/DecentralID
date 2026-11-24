@@ -7,6 +7,8 @@ from backend.app.models.issuance_job import IssuanceJob
 from backend.app.models.credential_template import CredentialTemplate
 from backend.app.models.presentation import PresentationShare
 from backend.app.models.status_list import StatusList
+from backend.app.models.intelligence import DocumentUpload, ExtractedCredentialData
+from backend.app.models.network import ApiKey, WebhookSubscription, WebhookDelivery, StorageRecord
 
 __all__ = [
     "TimestampMixin",
@@ -22,4 +24,10 @@ __all__ = [
     "CredentialTemplate",
     "PresentationShare",
     "StatusList",
+    "DocumentUpload",
+    "ExtractedCredentialData",
+    "ApiKey",
+    "WebhookSubscription",
+    "WebhookDelivery",
+    "StorageRecord",
 ]

@@ -22,6 +22,11 @@ class PrepareCredentialResponse(BaseModel):
 class SignCredentialRequest(BaseModel):
     private_key: str = Field(..., description="Issuer operational signing key private key (hex)")
 
+class CompleteSigningRequest(BaseModel):
+    signature: str = Field(..., description="Cryptographic ECDSA signature (0x...) from client wallet or KMS")
+    signer_address: str = Field(..., pattern="^0x[a-fA-F0-9]{40}$", description="Public address of the authorized operational signer")
+    cryptosuite: Optional[str] = Field(default="ecdsa-jcs-2019", description="Cryptographic suite: 'ecdsa-jcs-2019' or 'ecdsa-jcs-2019-keccak'")
+
 class ConfirmIssuanceRequest(BaseModel):
     tx_hash: str = Field(..., pattern="^0x[a-fA-F0-9]{64}$")
 
