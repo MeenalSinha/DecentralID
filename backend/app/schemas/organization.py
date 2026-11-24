@@ -28,3 +28,26 @@ class MemberResponse(BaseModel):
     role: str
     status: str
     created_at: str
+
+class OrganizationMetricsResponse(BaseModel):
+    total_credentials: int
+    pending_approval: int
+    active_credentials: int
+    suspended_credentials: int
+    revoked_credentials: int
+    authorized_keys_count: int
+    members_count: int
+
+class SigningKeyCreateRequest(BaseModel):
+    public_key_address: str = Field(..., pattern="^0x[a-fA-F0-9]{40}$")
+    key_type: str = Field(default="secp256k1")
+    valid_until: Optional[int] = Field(default=None, description="Unix timestamp expiration, 0 or null for indefinite")
+
+class SigningKeyResponse(BaseModel):
+    id: str
+    organization_id: str
+    public_key_address: str
+    key_type: str
+    status: str
+    valid_until: Optional[int]
+    created_at: str

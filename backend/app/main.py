@@ -11,6 +11,9 @@ from backend.app.api.routes.blockchain import router as blockchain_router
 from backend.app.api.routes.authentication import router as authentication_router
 from backend.app.api.routes.organizations import router as organizations_router
 from backend.app.api.routes.users import router as users_router
+from backend.app.api.routes.credentials import router as credentials_router
+from backend.app.api.routes.verification import router as verification_router
+from backend.app.api.routes.credential_lifecycle import router as lifecycle_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -49,3 +52,6 @@ app.include_router(blockchain_router, prefix=settings.API_V1_STR)
 app.include_router(authentication_router, prefix=settings.API_V1_STR)
 app.include_router(organizations_router, prefix=settings.API_V1_STR)
 app.include_router(users_router, prefix=settings.API_V1_STR)
+app.include_router(credentials_router, prefix=settings.API_V1_STR)
+app.include_router(verification_router, prefix=settings.API_V1_STR)
+app.include_router(lifecycle_router, prefix=settings.API_V1_STR)

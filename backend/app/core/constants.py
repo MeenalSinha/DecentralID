@@ -21,10 +21,28 @@ class MembershipStatus(str, Enum):
     SUSPENDED = "SUSPENDED"
     REVOKED = "REVOKED"
 
+class CredentialWorkflowStatus(str, Enum):
+    PREPARED = "PREPARED"
+    PENDING_APPROVAL = "PENDING_APPROVAL"
+    APPROVED = "APPROVED"
+    AWAITING_SIGNATURE = "AWAITING_SIGNATURE"
+    PENDING_BLOCKCHAIN_REGISTRATION = "PENDING_BLOCKCHAIN_REGISTRATION"
+    ISSUED = "ISSUED"
+    REVOKED = "REVOKED"
+    FAILED = "FAILED"
+
 class CredentialLifecycleStatus(str, Enum):
     ACTIVE = "ACTIVE"
     SUSPENDED = "SUSPENDED"
     REVOKED = "REVOKED"
+    EXPIRED = "EXPIRED"
+
+class IssuanceJobStatus(str, Enum):
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    CONFIRMED = "CONFIRMED"
+    FAILED = "FAILED"
+    RETRYING = "RETRYING"
 
 class SigningKeyStatus(str, Enum):
     ACTIVE = "ACTIVE"

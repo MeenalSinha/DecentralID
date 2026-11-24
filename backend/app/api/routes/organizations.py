@@ -10,10 +10,14 @@ from backend.app.schemas.organization import (
     OrganizationResponse,
     MemberInviteRequest,
     MemberResponse,
+    OrganizationMetricsResponse,
+    SigningKeyCreateRequest,
+    SigningKeyResponse,
 )
 from backend.app.api.dependencies.auth import get_current_user, require_role
 from backend.app.models.user import User, Wallet
-from backend.app.models.organization import Organization, OrganizationMembership
+from backend.app.models.organization import Organization, OrganizationMembership, SigningKey
+from backend.app.models.credential import Credential
 from backend.app.services.authorization_service import AuthorizationService
 
 router = APIRouter(prefix="/organizations", tags=["Organizations & Tenant Management"])
@@ -200,3 +204,95 @@ async def remove_member(
     membership.status = MembershipStatus.REVOKED.value
     await db.commit()
     return {"status": "success", "message": "Membership successfully revoked."}
+
+@router.get("/{org_id}/metrics", response_model=OrganizationMetricsResponse, status_code=status.HTTP_200_OK)
+async def get_organization_metrics(
+    org_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> OrganizationMetricsResponse:
+    await AuthorizationService.verify_tenant_access(
+        db, current_user, org_id, [UserRole.INSTITUTION_ADMIN.value, UserRole.AUTHORIZED_ISSUER.value, UserRole.AUDITOR.value]
+    )
+
+    creds_res = await db.execute(select(Credential).where(Credential.organization_id == org_id))
+    creds = creds_res.scalars().all()
+
+    total = len(creds)
+    pending = sum(1 for c in creds if c.workflow_status == "PENDING_APPROVAL")
+    active = sum(1 for c in creds if c.status == "ACTIVE" and c.workflow_status == "ISSUED")
+    suspended = sum(1 for c in creds if c.status == "SUSPENDED")
+    revoked = sum(1 for c in creds if c.status == "REVOKED")
+
+    keys_res = await db.execute(select(SigningKey).where(SigningKey.organization_id == org_id, SigningKey.status == "ACTIVE"))
+    keys = keys_res.scalars().all()
+
+    mems_res = await db.execute(select(OrganizationMembership).where(OrganizationMembership.organization_id == org_id, OrganizationMembership.status == "ACTIVE"))
+    mems = mems_res.scalars().all()
+
+    return OrganizationMetricsResponse(
+        total_credentials=total,
+        pending_approval=pending,
+        active_credentials=active,
+        suspended_credentials=suspended,
+        revoked_credentials=revoked,
+        authorized_keys_count=len(keys),
+        members_count=len(mems),
+    )
+
+@router.get("/{org_id}/signing-keys", response_model=List[SigningKeyResponse], status_code=status.HTTP_200_OK)
+async def list_signing_keys(
+    org_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> List[SigningKeyResponse]:
+    await AuthorizationService.verify_tenant_access(
+        db, current_user, org_id, [UserRole.INSTITUTION_ADMIN.value, UserRole.AUTHORIZED_ISSUER.value, UserRole.AUDITOR.value]
+    )
+
+    res = await db.execute(select(SigningKey).where(SigningKey.organization_id == org_id))
+    keys = res.scalars().all()
+    return [
+        SigningKeyResponse(
+            id=k.id,
+            organization_id=k.organization_id,
+            public_key_address=k.public_key_address,
+            key_type=k.key_type,
+            status=k.status,
+            valid_until=k.valid_until,
+            created_at=k.created_at.isoformat() if k.created_at else "",
+        )
+        for k in keys
+    ]
+
+@router.post("/{org_id}/signing-keys", response_model=SigningKeyResponse, status_code=status.HTTP_201_CREATED)
+async def register_signing_key(
+    org_id: str,
+    payload: SigningKeyCreateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> SigningKeyResponse:
+    await AuthorizationService.verify_tenant_access(
+        db, current_user, org_id, [UserRole.INSTITUTION_ADMIN.value]
+    )
+
+    key = SigningKey(
+        organization_id=org_id,
+        public_key_address=payload.public_key_address.lower(),
+        key_type=payload.key_type,
+        status="ACTIVE",
+        valid_until=payload.valid_until,
+    )
+    db.add(key)
+    await db.commit()
+    await db.refresh(key)
+
+    return SigningKeyResponse(
+        id=key.id,
+        organization_id=key.organization_id,
+        public_key_address=key.public_key_address,
+        key_type=key.key_type,
+        status=key.status,
+        valid_until=key.valid_until,
+        created_at=key.created_at.isoformat() if key.created_at else "",
+    )

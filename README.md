@@ -19,11 +19,12 @@ Rather than relying on easily faked PDF certificates, gameable reputation points
 | Module | Purpose | Status |
 |---|---|---|
 | **DecentralID Trust** | Authoritative on-chain registries: `IssuerRegistry`, `CredentialRegistry`, `CredentialStatusRegistry`. | **Implemented (Phase 4)** |
-| **DecentralID Issuer** | Multi-tenant institutional portal for managing signing keys and issuing credentials. | **Foundation Active (Phases 2–3)** |
-| **DecentralID Wallet** | Personal credential wallet for students and professionals to hold and selectively disclose qualifications. | **Foundation Active (Phases 2–3)** |
-| **DecentralID Verify** | Independent verification portal checking cryptographic proofs and on-chain revocation status. | **Foundation Active (Phases 2–3)** |
+| **DecentralID Issuer** | Multi-tenant institutional portal for managing signing keys and issuing credentials. | **In Progress (Phase 6)** |
+| **DecentralID Wallet** | Personal credential wallet for students and professionals to hold and selectively disclose qualifications. | **In Progress (Phase 7)** |
+| **DecentralID Verify** | Independent verification portal checking cryptographic proofs and on-chain revocation status. | **In Progress (Phase 8)** |
+| **DecentralID Lifecycle** | Cryptographic lifecycle, W3C Bitstring Status Lists, suspension and irreversible revocation. | **In Progress (Phase 9)** |
 | **DecentralID Intelligence**| AI-assisted document extraction and anomaly detection. | *Planned (Phase 10)* |
-| **DecentralID Network** | Developer REST/GraphQL APIs and webhooks for external HRIS/ATS systems. | *Planned (Phase 9)* |
+| **DecentralID Network** | Developer REST/GraphQL APIs and webhooks for external HRIS/ATS systems. | *Planned (Phase 11)* |
 
 ---
 
@@ -58,7 +59,7 @@ npm install
 # Compile contracts (dual-compiler 0.8.20 & 0.8.19)
 npx hardhat compile
 
-# Run Hardhat test suite (39 tests: unit, integration, invariant)
+# Run Hardhat test suite (43 tests: unit, integration, invariant)
 npx hardhat test
 
 # Deploy registries locally
@@ -75,7 +76,7 @@ python -m venv backend/venv
 # Install dependencies
 pip install -r backend/requirements.txt
 
-# Run backend test suite (9 tests)
+# Run backend test suite (12 tests)
 python -m pytest backend/tests
 
 # Start development server

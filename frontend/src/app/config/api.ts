@@ -19,3 +19,14 @@ export async function fetchApi<T>(endpoint: string, options: RequestInit = {}): 
 
   return response.json();
 }
+
+export async function apiGet<T>(endpoint: string): Promise<T> {
+  return fetchApi<T>(endpoint, { method: 'GET' });
+}
+
+export async function apiPost<T>(endpoint: string, body?: any): Promise<T> {
+  return fetchApi<T>(endpoint, {
+    method: 'POST',
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}

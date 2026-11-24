@@ -17,6 +17,7 @@ class Settings(BaseSettings):
 
     # Security & Sessions
     SECRET_KEY: str = Field(default="decentralid-default-development-secret-key-change-in-prod-32bytes")
+    CREDENTIAL_ENCRYPTION_KEY: Optional[str] = Field(default=None) # AES-256-GCM master key
     SESSION_COOKIE_NAME: str = Field(default="decentralid_session")
     SESSION_EXPIRE_SECONDS: int = Field(default=86400) # 24 hours
     CHALLENGE_EXPIRE_SECONDS: int = Field(default=300) # 5 minutes

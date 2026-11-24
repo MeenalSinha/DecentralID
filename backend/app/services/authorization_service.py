@@ -30,6 +30,19 @@ class AuthorizationService:
         return res.scalar_one_or_none()
 
     @staticmethod
+    async def has_organization_role(
+        db: AsyncSession,
+        user_id: str,
+        organization_id: str,
+        required_roles: list[str],
+    ) -> bool:
+        """Check if user has an active membership with one of the required roles."""
+        membership = await AuthorizationService.get_membership(db, user_id, organization_id)
+        if not membership:
+            return False
+        return membership.role in required_roles
+
+    @staticmethod
     async def verify_tenant_access(
         db: AsyncSession,
         user: User,
