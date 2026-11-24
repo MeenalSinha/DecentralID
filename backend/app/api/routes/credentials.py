@@ -175,9 +175,15 @@ async def get_holder_credentials(
     current_user: User = Depends(get_current_user),
 ) -> HolderCredentialsResponse:
     """
-    Returns all verifiable credentials belonging to a holder wallet.
-    Decrypts credential subjects and salts for authorized holders.
+    Returns verifiable credentials for the authenticated holder.
+    Decrypts credential subjects for the authorized holder only.
+    The commitment salt is NEVER transmitted to the client — it is a server-side secret
+    used only for internal commitment verification.
     """
+    from sqlalchemy import select as _select
+    from backend.app.models.organization import Organization
+    from backend.app.core.config import settings as _settings
+
     wallet_norm = wallet_address.lower()
     user_wallet = await _get_user_wallet_address(db, current_user.id)
     user_wallet_norm = (user_wallet or "").lower()
@@ -199,34 +205,44 @@ async def get_holder_credentials(
             subject = EncryptionService.decrypt_subject(
                 c.encrypted_subject, c.id, c.organization_id
             )
-            salt_bytes = EncryptionService.decrypt_salt(
-                c.encrypted_salt, c.id, c.organization_id
-            )
-            salt_hex = "0x" + salt_bytes.hex()
         except Exception:
             subject = {"error": "Decryption failed or invalid key"}
-            salt_hex = "0x"
 
+        # Resolve issuing organization for correct issuer DID
+        org_res = await db.execute(_select(Organization).where(Organization.id == c.organization_id))
+        org = org_res.scalar_one_or_none()
+        issuer_addr = (org.on_chain_address if org and org.on_chain_address else "").lower()
+
+        # Build W3C document with correct issuer (organization, not recipient)
+        # Salt is intentionally NOT included; it remains server-side only
         w3c_doc = {
             "@context": [
                 "https://www.w3.org/ns/credentials/v2",
-                "https://w3id.org/security/suites/jcs-eda2019/v1"
+                "https://decentralid.org/contexts/v1",
             ],
             "id": c.w3c_id,
             "type": ["VerifiableCredential", c.schema_type],
-            "issuer": f"did:pkh:eip155:1337:{c.recipient_address}",
+            "issuer": {
+                "id": f"did:pkh:eip155:{_settings.CHAIN_ID}:{issuer_addr}",
+                "name": org.name if org else "Accredited Issuer",
+            },
             "validFrom": c.issued_at.isoformat() if c.issued_at else c.created_at.isoformat(),
             "credentialSubject": subject,
             "credentialStatus": {
                 "id": f"/api/v1/credentials/{c.credential_id}/status",
                 "type": "BitstringStatusListEntry",
-                "statusPurpose": "revocation"
+                "statusPurpose": "revocation",
             },
             "commitment": c.commitment,
-            "proof": c.proof_json,
         }
         if c.valid_until:
             w3c_doc["validUntil"] = c.valid_until.isoformat()
+        if c.proof_json:
+            import json as _json
+            try:
+                w3c_doc["proof"] = _json.loads(c.proof_json) if isinstance(c.proof_json, str) else c.proof_json
+            except Exception:
+                pass
 
         items.append(
             HolderCredentialDetail(
@@ -244,7 +260,7 @@ async def get_holder_credentials(
                 issued_at=c.issued_at,
                 valid_until=c.valid_until,
                 claims=subject,
-                salt=salt_hex,
+                # salt field omitted — commitment secret stays server-side
                 w3c_document=w3c_doc,
             )
         )
@@ -288,7 +304,37 @@ async def get_credential(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    # Returns decrypted W3C credential for authorized user
+    """
+    Returns the decrypted W3C Verifiable Credential for authorized users.
+    Authorization: caller must be a member of the issuing organization OR
+    the designated holder of the credential.
+    """
+    cred_stmt = select(Credential).where(
+        (Credential.id == credential_id) | (Credential.credential_id == credential_id)
+    )
+    cred_res = await db.execute(cred_stmt)
+    cred = cred_res.scalar_one_or_none()
+    if not cred:
+        raise ResourceNotFoundException("Credential not found.")
+
+    # Authorization: issuing org member OR holder
+    user_wallet = await _get_user_wallet_address(db, current_user.id)
+    user_wallet_norm = (user_wallet or "").lower()
+    is_holder = user_wallet_norm == cred.recipient_address.lower()
+
+    is_org_member = False
+    if not is_holder:
+        mem_stmt = select(OrganizationMembership).where(
+            OrganizationMembership.user_id == current_user.id,
+            OrganizationMembership.organization_id == cred.organization_id,
+            OrganizationMembership.status == "ACTIVE",
+        )
+        mem_res = await db.execute(mem_stmt)
+        is_org_member = mem_res.scalar_one_or_none() is not None
+
+    if not is_holder and not is_org_member and current_user.role != "ADMIN":
+        raise TenantAccessDeniedException("Access denied: Not authorized to view this credential.")
+
     return await IssuanceService.get_verifiable_credential(db, credential_id)
 
 @router.get("", response_model=CredentialListResponse)
@@ -298,6 +344,11 @@ async def list_credentials(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> CredentialListResponse:
+    """
+    Lists credentials scoped to the calling user's context.
+    Without filters, returns only credentials for organizations the user belongs to.
+    Prevents unauthorized cross-tenant access.
+    """
     query = select(Credential)
 
     if organization_id:
@@ -311,6 +362,19 @@ async def list_credentials(
         if not mem_res.scalar_one_or_none():
             raise TenantAccessDeniedException("Access denied: Not a member of this organization.")
         query = query.where(Credential.organization_id == organization_id)
+    elif recipient_address:
+        # Holder can list their own credentials
+        wallet_norm = recipient_address.lower()
+        user_wallet = await _get_user_wallet_address(db, current_user.id)
+        if (user_wallet or "").lower() != wallet_norm and current_user.role != "ADMIN":
+            raise TenantAccessDeniedException("Access denied: Not authorized to list credentials for this address.")
+    else:
+        # No filter: scope to organizations the calling user belongs to
+        mem_subq = select(OrganizationMembership.organization_id).where(
+            OrganizationMembership.user_id == current_user.id,
+            OrganizationMembership.status == "ACTIVE",
+        )
+        query = query.where(Credential.organization_id.in_(mem_subq))
 
     if recipient_address:
         query = query.where(Credential.recipient_address == recipient_address.lower())

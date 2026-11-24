@@ -115,7 +115,9 @@ class PresentationService:
                 "originalCommitment": cred.commitment,
                 "disclosedFields": list(disclosed_claims.keys()),
                 "maskedFields": masked_claims,
-                "salt": "0x" + salt_bytes.hex(),
+                # NOTE: salt is intentionally omitted from VP document.
+                # It is a server-side commitment secret and must never be transmitted
+                # to the verifier. The verifier uses the commitment hash directly.
             },
             "proof": proof_obj,
         }
@@ -124,27 +126,34 @@ class PresentationService:
             presented_vc["validUntil"] = cred.valid_until.strftime("%Y-%m-%dT%H:%M:%SZ")
 
         # Construct W3C Verifiable Presentation 2.0
-        vp_document = {
+        # NOTE: Holder binding proof requires the holder to sign with their private key.
+        # The backend cannot produce this proof without the holder's key.
+        # When holder_signature is not provided, the VP is UNSIGNED (no holder binding proof).
+        # Verifiers MUST check for the absence of a VP-level proof and treat the presentation
+        # as "credential presented, holder binding unverified" rather than "holder bound".
+        vp_document: dict = {
             "@context": [
                 "https://www.w3.org/ns/credentials/v2",
-                "https://w3id.org/security/suites/jcs-eda2019/v1"
+                "https://decentralid.org/contexts/v1",
             ],
             "id": presentation_id,
             "type": ["VerifiablePresentation"],
-            "holder": f"did:pkh:eip155:1337:{holder_norm}",
+            "holder": f"did:pkh:eip155:{settings.CHAIN_ID}:{holder_norm}",
             "verifiableCredential": [presented_vc],
-            "proof": {
+        }
+
+        # Only attach a VP-level proof when a genuine holder_signature is supplied
+        if holder_signature and holder_signature.startswith("0x") and len(holder_signature) >= 130:
+            vp_document["proof"] = {
                 "type": "DataIntegrityProof",
                 "cryptosuite": "ecdsa-jcs-2019",
                 "created": now_utc.isoformat(),
-                "verificationMethod": f"did:pkh:eip155:1337:{holder_norm}#key-1",
+                "verificationMethod": f"did:pkh:eip155:{settings.CHAIN_ID}:{holder_norm}#key-1",
                 "proofPurpose": "authentication",
-                "proofValue": holder_signature or "holder_verified_authorization",
+                "proofValue": holder_signature,
             }
-        }
-
-        if audience_did:
-            vp_document["proof"]["challenge"] = audience_did
+            if audience_did:
+                vp_document["proof"]["challenge"] = audience_did
 
         # Generate high-entropy opaque token for QR sharing
         token = f"pr_{secrets.token_urlsafe(32)}"

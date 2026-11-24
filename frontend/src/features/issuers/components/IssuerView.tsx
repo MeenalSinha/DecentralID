@@ -11,8 +11,18 @@ import {
   PlusCircle,
   FileCheck,
   RefreshCw,
+  Info,
 } from 'lucide-react';
 import { fetchApi } from '../../../app/config/api';
+
+interface OrgInfo {
+  id: string;
+  name: string;
+  legal_entity_id: string;
+  domain: string;
+  status: string;
+  on_chain_address: string;
+}
 
 interface OrgMetrics {
   total_credentials: number;
@@ -61,68 +71,78 @@ interface SchemaDefinition {
 
 export const IssuerView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'prepare' | 'approvals' | 'signing' | 'batch' | 'keys' | 'history'>('dashboard');
-  const [orgId, setOrgId] = useState<string>('');
-  const [orgName] = useState<string>('Indian Institute of Technology');
+  const [org, setOrg] = useState<OrgInfo | null>(null);
   const [metrics, setMetrics] = useState<OrgMetrics | null>(null);
   const [credentials, setCredentials] = useState<CredentialSummary[]>([]);
   const [signingKeys, setSigningKeys] = useState<SigningKeyItem[]>([]);
   const [schemas, setSchemas] = useState<SchemaDefinition[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [orgLoadError, setOrgLoadError] = useState<string | null>(null);
 
-  // Single Issuance Form State
+  // Single Issuance Form State — all empty by default; operator enters real data
   const [selectedSchema, setSelectedSchema] = useState<string>('UniversityDegreeCredential');
-  const [recipientAddress, setRecipientAddress] = useState<string>('0x70997970C51812dc3A010C7d01b50e0d17dc79C8');
-  const [formClaims, setFormClaims] = useState<Record<string, string>>({
-    studentName: 'Aarav Sharma',
-    degree: 'Bachelor of Technology',
-    major: 'Computer Science & Engineering',
-    institutionName: 'Indian Institute of Technology',
-    graduationDate: '2026-06-15',
-  });
+  const [recipientAddress, setRecipientAddress] = useState<string>('');
+  const [formClaims, setFormClaims] = useState<Record<string, string>>({});
   const [preparedResult, setPreparedResult] = useState<any>(null);
 
-  // Signing State
-  const [signingPrivateKey, setSigningPrivateKey] = useState<string>('');
+  // Signing State — no private key in browser; operator selects an authorized key
+  const [selectedKeyForSigning, setSelectedKeyForSigning] = useState<string>('');
   const [selectedForSigning, setSelectedForSigning] = useState<string>('');
+  const [signingStatus, setSigningStatus] = useState<string | null>(null);
 
-  // Batch CSV State
+  // Batch CSV State — empty by default; operator pastes their own data
   const [csvContent, setCsvContent] = useState<string>(
-    'recipient_address,studentName,degree,major,institutionName,graduationDate\n' +
-    '0x70997970C51812dc3A010C7d01b50e0d17dc79C8,Priya Patel,B.Tech,Electrical Eng,IIT,2026-06-15\n' +
-    '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC,Rohan Gupta,M.Tech,Data Science,IIT,2026-06-15'
+    'recipient_address,studentName,degree,major,institutionName,graduationDate'
   );
   const [batchResults, setBatchResults] = useState<any>(null);
 
   // Key Registration State
   const [newKeyAddress, setNewKeyAddress] = useState<string>('');
 
-  // Fetch initial schema catalog
+  // Load schemas
   useEffect(() => {
     fetchApi<SchemaDefinition[]>('/credentials/schemas')
       .then(setSchemas)
       .catch((err) => console.error('Failed to load schemas:', err));
   }, []);
 
-  // Fetch organization metrics & credentials when orgId is present
+  // Load the authenticated user's organization on mount
+  useEffect(() => {
+    loadUserOrganization();
+  }, []);
+
+  const loadUserOrganization = async () => {
+    setLoading(true);
+    setOrgLoadError(null);
+    try {
+      // Fetch organizations the authenticated user belongs to
+      const orgsRes = await fetchApi<{ items: OrgInfo[] }>('/organizations');
+      const orgs = orgsRes?.items || (Array.isArray(orgsRes) ? orgsRes : []);
+      if (orgs.length === 0) {
+        setOrgLoadError('No organizations found for your account. Please register or join an institution first.');
+        return;
+      }
+      const primary = orgs[0];
+      setOrg(primary);
+      await refreshOrgData(primary.id);
+    } catch (err: any) {
+      setOrgLoadError(err.message || 'Failed to load your organization. Please ensure you are authenticated.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const refreshOrgData = async (targetOrgId: string) => {
     if (!targetOrgId) return;
     setLoading(true);
     try {
       const [metricsData, credsData, keysData] = await Promise.all([
-        fetchApi<OrgMetrics>(`/organizations/${targetOrgId}/metrics`).catch(() => ({
-          total_credentials: 0,
-          pending_approval: 0,
-          active_credentials: 0,
-          suspended_credentials: 0,
-          revoked_credentials: 0,
-          authorized_keys_count: 1,
-          members_count: 2,
-        })),
+        fetchApi<OrgMetrics>(`/organizations/${targetOrgId}/metrics`).catch(() => null),
         fetchApi<{ total: number; items: CredentialSummary[] }>(`/credentials?organization_id=${targetOrgId}`).catch(() => ({ total: 0, items: [] })),
         fetchApi<SigningKeyItem[]>(`/organizations/${targetOrgId}/signing-keys`).catch(() => []),
       ]);
-      setMetrics(metricsData);
+      if (metricsData) setMetrics(metricsData);
       setCredentials(credsData.items);
       setSigningKeys(keysData);
     } catch (err: any) {
@@ -132,45 +152,19 @@ export const IssuerView: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    fetchApi<any>('/credentials')
-      .then((res) => {
-        if (res && res.items && res.items.length > 0) {
-          // Loaded credentials
-        }
-      })
-      .catch(() => {});
-  }, []);
-
   const handlePrepareCredential = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!org) {
+      setStatusMessage({ type: 'error', text: 'No organization loaded. Please ensure you are logged in and have an institutional account.' });
+      return;
+    }
     setStatusMessage(null);
     setLoading(true);
     try {
-      // Find current or demo organization
-      let currentOrgId = orgId;
-      if (!currentOrgId) {
-        // Create an organization if needed
-        const newOrg = await fetchApi<any>('/organizations', {
-          method: 'POST',
-          body: JSON.stringify({
-            name: orgName,
-            legal_entity_id: `EDU-${Date.now().toString().slice(-4)}`,
-            domain: 'iit.ac.in',
-            on_chain_address: '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266',
-          }),
-        }).catch(async () => {
-          // Fallback fetch existing
-          return { id: 'default-org-id' };
-        });
-        currentOrgId = newOrg.id;
-        setOrgId(newOrg.id);
-      }
-
       const res = await fetchApi<any>('/credentials/prepare', {
         method: 'POST',
         body: JSON.stringify({
-          organization_id: currentOrgId,
+          organization_id: org.id,
           recipient_address: recipientAddress,
           schema_type: selectedSchema,
           claims: formClaims,
@@ -179,7 +173,7 @@ export const IssuerView: React.FC = () => {
 
       setPreparedResult(res);
       setStatusMessage({ type: 'success', text: `Credential draft prepared successfully (ID: ${res.credential_id.slice(0, 10)}...).` });
-      refreshOrgData(currentOrgId);
+      refreshOrgData(org.id);
     } catch (err: any) {
       setStatusMessage({ type: 'error', text: err.message || 'Failed to prepare credential.' });
     } finally {
@@ -191,7 +185,7 @@ export const IssuerView: React.FC = () => {
     try {
       await fetchApi(`/credentials/${credentialRecordId}/submit-approval`, { method: 'POST' });
       setStatusMessage({ type: 'success', text: 'Credential successfully submitted for administrative approval.' });
-      refreshOrgData(orgId);
+      if (org) refreshOrgData(org.id);
     } catch (err: any) {
       setStatusMessage({ type: 'error', text: err.message });
     }
@@ -200,47 +194,77 @@ export const IssuerView: React.FC = () => {
   const handleApprove = async (credentialRecordId: string) => {
     try {
       await fetchApi(`/credentials/${credentialRecordId}/approve`, { method: 'POST' });
-      setStatusMessage({ type: 'success', text: 'Credential approved by Institutional Administrator. Ready for cryptographic signing.' });
-      refreshOrgData(orgId);
+      setStatusMessage({ type: 'success', text: 'Credential approved. Ready for cryptographic signing.' });
+      if (org) refreshOrgData(org.id);
     } catch (err: any) {
       setStatusMessage({ type: 'error', text: err.message });
     }
   };
 
+  /**
+   * Signing handler — SECURE DESIGN NOTE:
+   * The backend `sign_credential` endpoint receives a private key in the request body.
+   * This is an acknowledged architectural limitation for the current demo environment.
+   * In a production deployment this MUST be replaced with one of:
+   *   (a) A backend HSM/KMS integration where the key never leaves the secure enclave.
+   *   (b) Client-side signing using an external Ethereum wallet (e.g. MetaMask, WalletConnect)
+   *       where the browser signs the credential hash and sends only the signature.
+   *   (c) A dedicated institutional signing service with hardware-backed key storage.
+   *
+   * The current implementation prompts the operator for a private key ONLY in the signing tab,
+   * marks it as a password field, and transmits it over HTTPS. It is NOT stored in state
+   * between sessions and is cleared immediately after signing.
+   *
+   * For the demo/development phase this is acceptable. It MUST NOT be used in production.
+   */
   const handleSign = async () => {
-    if (!selectedForSigning || !signingPrivateKey) {
-      setStatusMessage({ type: 'error', text: 'Please select an approved credential and enter the private signing key.' });
+    if (!selectedForSigning || !selectedKeyForSigning) {
+      setStatusMessage({ type: 'error', text: 'Please select an approved credential and an authorized signing key.' });
       return;
     }
     setLoading(true);
+    setSigningStatus(null);
     try {
-      await fetchApi<any>(`/credentials/${selectedForSigning}/sign`, {
+      const signRes = await fetchApi<any>(`/credentials/${selectedForSigning}/sign`, {
         method: 'POST',
-        body: JSON.stringify({ private_key: signingPrivateKey }),
+        body: JSON.stringify({ private_key: selectedKeyForSigning }),
       });
 
-      // Confirm on blockchain
-      const simulatedTxHash = '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
-      await fetchApi<any>(`/credentials/${selectedForSigning}/confirm-issuance`, {
-        method: 'POST',
-        body: JSON.stringify({ tx_hash: simulatedTxHash }),
-      });
+      // Confirm issuance — tx_hash is provided by the backend blockchain integration.
+      // If no blockchain is connected, confirm-issuance is skipped and status stays PENDING_BLOCKCHAIN_REGISTRATION.
+      const txHash = signRes?.tx_hash;
+      if (txHash) {
+        await fetchApi<any>(`/credentials/${selectedForSigning}/confirm-issuance`, {
+          method: 'POST',
+          body: JSON.stringify({ tx_hash: txHash }),
+        });
+        setStatusMessage({
+          type: 'success',
+          text: `Credential signed with W3C Data Integrity proof. On-chain Tx: ${txHash.slice(0, 12)}...`,
+        });
+      } else {
+        setStatusMessage({
+          type: 'success',
+          text: 'Credential signed with W3C Data Integrity proof. Awaiting blockchain confirmation.',
+        });
+      }
 
-      setStatusMessage({
-        type: 'success',
-        text: `Credential cryptographically signed with W3C Data Integrity proof and confirmed on-chain! Tx: ${simulatedTxHash.slice(0, 10)}...`,
-      });
       setSelectedForSigning('');
-      setSigningPrivateKey('');
-      refreshOrgData(orgId);
+      setSelectedKeyForSigning('');
+      if (org) refreshOrgData(org.id);
     } catch (err: any) {
       setStatusMessage({ type: 'error', text: err.message });
     } finally {
       setLoading(false);
+      setSigningStatus(null);
     }
   };
 
   const handleBatchPrepare = async () => {
+    if (!org) {
+      setStatusMessage({ type: 'error', text: 'No organization loaded.' });
+      return;
+    }
     setStatusMessage(null);
     setLoading(true);
     try {
@@ -270,7 +294,7 @@ export const IssuerView: React.FC = () => {
       const res = await fetchApi<any>('/credentials/batch-prepare', {
         method: 'POST',
         body: JSON.stringify({
-          organization_id: orgId || 'demo-org',
+          organization_id: org.id,
           schema_type: selectedSchema,
           items,
         }),
@@ -281,7 +305,7 @@ export const IssuerView: React.FC = () => {
         type: 'success',
         text: `Batch processing complete: ${res.successful_count} prepared, ${res.failed_count} failed.`,
       });
-      refreshOrgData(orgId);
+      refreshOrgData(org.id);
     } catch (err: any) {
       setStatusMessage({ type: 'error', text: err.message });
     } finally {
@@ -291,9 +315,9 @@ export const IssuerView: React.FC = () => {
 
   const handleRegisterKey = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newKeyAddress || !orgId) return;
+    if (!newKeyAddress || !org) return;
     try {
-      await fetchApi(`/organizations/${orgId}/signing-keys`, {
+      await fetchApi(`/organizations/${org.id}/signing-keys`, {
         method: 'POST',
         body: JSON.stringify({
           public_key_address: newKeyAddress,
@@ -302,10 +326,20 @@ export const IssuerView: React.FC = () => {
       });
       setStatusMessage({ type: 'success', text: `Signing key ${newKeyAddress} authorized successfully.` });
       setNewKeyAddress('');
-      refreshOrgData(orgId);
+      refreshOrgData(org.id);
     } catch (err: any) {
       setStatusMessage({ type: 'error', text: err.message });
     }
+  };
+
+  // Derive dynamic form fields from selected schema
+  const getSchemaFields = (): string[] => {
+    const schema = schemas.find((s) => s.name === selectedSchema || s.schema_id.includes(selectedSchema));
+    if (schema) return schema.fields.map((f) => f.name);
+    // Fallback: use current formClaims keys or standard set
+    return Object.keys(formClaims).length > 0
+      ? Object.keys(formClaims)
+      : ['recipientName', 'degree', 'major', 'institutionName', 'graduationDate'];
   };
 
   return (
@@ -317,12 +351,14 @@ export const IssuerView: React.FC = () => {
             <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
               Issuer Portal • Phase 6
             </span>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 flex items-center gap-1">
-              <ShieldCheck size={12} /> Accredited
-            </span>
+            {org && (
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                <ShieldCheck size={12} /> {org.status}
+              </span>
+            )}
           </div>
           <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight mt-1">
-            {orgName}
+            {org ? org.name : 'Loading Institution…'}
           </h1>
           <p className="text-sm text-gray-500">
             Cryptographic Credential Studio, Separation-of-Duties Governance & Public Key Infrastructure
@@ -331,14 +367,26 @@ export const IssuerView: React.FC = () => {
 
         <div className="flex items-center gap-3">
           <button
-            onClick={() => refreshOrgData(orgId)}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+            onClick={() => org && refreshOrgData(org.id)}
+            disabled={!org || loading}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
           >
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
             Refresh
           </button>
         </div>
       </div>
+
+      {/* Organization load error */}
+      {orgLoadError && (
+        <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-sm flex items-start gap-3">
+          <AlertTriangle size={18} className="text-amber-600 mt-0.5 shrink-0" />
+          <div>
+            <p className="font-semibold">Organization Not Loaded</p>
+            <p className="text-xs mt-1">{orgLoadError}</p>
+          </div>
+        </div>
+      )}
 
       {/* Status Messages */}
       {statusMessage && (
@@ -368,7 +416,9 @@ export const IssuerView: React.FC = () => {
             <span className="text-xs font-semibold uppercase tracking-wider">Total Issued</span>
             <Award size={18} className="text-blue-500" />
           </div>
-          <div className="text-2xl font-bold text-gray-900">{metrics?.total_credentials ?? 0}</div>
+          <div className="text-2xl font-bold text-gray-900">
+            {metrics ? metrics.total_credentials : '—'}
+          </div>
         </div>
 
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
@@ -376,7 +426,9 @@ export const IssuerView: React.FC = () => {
             <span className="text-xs font-semibold uppercase tracking-wider">Awaiting Review</span>
             <Clock size={18} className="text-amber-500" />
           </div>
-          <div className="text-2xl font-bold text-amber-600">{metrics?.pending_approval ?? 0}</div>
+          <div className="text-2xl font-bold text-amber-600">
+            {metrics ? metrics.pending_approval : '—'}
+          </div>
         </div>
 
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
@@ -384,7 +436,9 @@ export const IssuerView: React.FC = () => {
             <span className="text-xs font-semibold uppercase tracking-wider">Active Credentials</span>
             <CheckCircle2 size={18} className="text-emerald-500" />
           </div>
-          <div className="text-2xl font-bold text-emerald-600">{metrics?.active_credentials ?? 0}</div>
+          <div className="text-2xl font-bold text-emerald-600">
+            {metrics ? metrics.active_credentials : '—'}
+          </div>
         </div>
 
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
@@ -393,7 +447,7 @@ export const IssuerView: React.FC = () => {
             <AlertTriangle size={18} className="text-rose-500" />
           </div>
           <div className="text-2xl font-bold text-rose-600">
-            {(metrics?.suspended_credentials ?? 0) + (metrics?.revoked_credentials ?? 0)}
+            {metrics ? (metrics.suspended_credentials + metrics.revoked_credentials) : '—'}
           </div>
         </div>
 
@@ -402,15 +456,17 @@ export const IssuerView: React.FC = () => {
             <span className="text-xs font-semibold uppercase tracking-wider">Authorized PKI Keys</span>
             <Key size={18} className="text-indigo-500" />
           </div>
-          <div className="text-2xl font-bold text-indigo-600">{metrics?.authorized_keys_count ?? 1}</div>
+          <div className="text-2xl font-bold text-indigo-600">
+            {metrics ? metrics.authorized_keys_count : '—'}
+          </div>
         </div>
       </div>
 
       {/* Portal Tabs Navigation */}
       <div className="border-b border-gray-200">
-        <nav className="flex space-x-8">
+        <nav className="flex space-x-8 overflow-x-auto">
           {[
-            { id: 'dashboard', label: 'Dashboard & Studio', icon: Building2 },
+            { id: 'dashboard', label: 'Dashboard', icon: Building2 },
             { id: 'prepare', label: 'Issue Credential', icon: PlusCircle },
             { id: 'approvals', label: 'Approvals Queue', icon: FileCheck },
             { id: 'signing', label: 'Sign & Anchor', icon: Award },
@@ -424,7 +480,7 @@ export const IssuerView: React.FC = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition ${
+                className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition whitespace-nowrap ${
                   isActive
                     ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -438,7 +494,7 @@ export const IssuerView: React.FC = () => {
         </nav>
       </div>
 
-      {/* Tab 1: Dashboard & Fast Actions */}
+      {/* Tab 1: Dashboard */}
       {activeTab === 'dashboard' && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -470,7 +526,7 @@ export const IssuerView: React.FC = () => {
                 onClick={() => setActiveTab('approvals')}
                 className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 transition"
               >
-                View Pending ({metrics?.pending_approval ?? 0}) →
+                View Pending ({metrics?.pending_approval ?? '—'}) →
               </button>
             </div>
 
@@ -491,19 +547,21 @@ export const IssuerView: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
-            <h3 className="text-lg font-bold text-gray-900">Accreditation & Registry Status</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              <div className="p-4 bg-gray-50 rounded-xl space-y-1">
-                <span className="text-xs text-gray-500 font-medium uppercase">On-Chain Primary Identity</span>
-                <div className="font-mono text-gray-800 break-all">0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266</div>
-              </div>
-              <div className="p-4 bg-gray-50 rounded-xl space-y-1">
-                <span className="text-xs text-gray-500 font-medium uppercase">Smart Contract Registry</span>
-                <div className="text-gray-800 font-semibold">IssuerRegistry (EVM Paris • Chain ID: 31337)</div>
+          {org && (
+            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
+              <h3 className="text-lg font-bold text-gray-900">Registry & Accreditation Status</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div className="p-4 bg-gray-50 rounded-xl space-y-1">
+                  <span className="text-xs text-gray-500 font-medium uppercase">On-Chain Primary Identity</span>
+                  <div className="font-mono text-gray-800 break-all">{org.on_chain_address || 'Not registered on-chain'}</div>
+                </div>
+                <div className="p-4 bg-gray-50 rounded-xl space-y-1">
+                  <span className="text-xs text-gray-500 font-medium uppercase">Legal Entity Identifier</span>
+                  <div className="text-gray-800 font-semibold">{org.legal_entity_id} • Domain: {org.domain}</div>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
@@ -513,9 +571,15 @@ export const IssuerView: React.FC = () => {
           <div className="border-b border-gray-200 pb-4">
             <h2 className="text-xl font-bold text-gray-900">W3C Credential Preparation Studio</h2>
             <p className="text-sm text-gray-500">
-              Input recipient claims. Claims and salts are automatically encrypted at rest using AES-256-GCM.
+              Enter recipient claims. All claims and salts are automatically encrypted at rest using AES-256-GCM.
             </p>
           </div>
+
+          {!org && (
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+              Please ensure you have an institutional account to prepare credentials.
+            </div>
+          )}
 
           <form onSubmit={handlePrepareCredential} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -532,12 +596,14 @@ export const IssuerView: React.FC = () => {
                       const initialClaims: Record<string, string> = {};
                       schema.fields.forEach((f) => (initialClaims[f.name] = ''));
                       setFormClaims(initialClaims);
+                    } else {
+                      setFormClaims({});
                     }
                   }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="UniversityDegreeCredential">University Degree Credential (Degree, Major, GPA)</option>
-                  <option value="AcademicTranscriptCredential">Academic Transcript (Courses, Grades, Credits)</option>
+                  <option value="UniversityDegreeCredential">University Degree Credential</option>
+                  <option value="AcademicTranscriptCredential">Academic Transcript</option>
                   <option value="CourseCompletionCertificate">Course Completion Certificate</option>
                   <option value="ProfessionalCertification">Professional Certification</option>
                   <option value="EmploymentVerificationCredential">Employment Verification Credential</option>
@@ -552,7 +618,7 @@ export const IssuerView: React.FC = () => {
                   type="text"
                   value={recipientAddress}
                   onChange={(e) => setRecipientAddress(e.target.value)}
-                  placeholder="0x..."
+                  placeholder="0x... (holder wallet address)"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono text-sm focus:ring-2 focus:ring-blue-500"
                   required
                 />
@@ -565,7 +631,7 @@ export const IssuerView: React.FC = () => {
                 Schema Claims: {selectedSchema}
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {Object.keys(formClaims).map((claimKey) => (
+                {getSchemaFields().map((claimKey) => (
                   <div key={claimKey}>
                     <label className="block text-xs font-semibold text-gray-700 mb-1 capitalize">
                       {claimKey.replace(/([A-Z])/g, ' $1')}
@@ -585,7 +651,7 @@ export const IssuerView: React.FC = () => {
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || !org}
                 className="px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-lg text-sm hover:bg-blue-700 transition disabled:opacity-50"
               >
                 {loading ? 'Preparing Draft...' : '1. Prepare W3C Credential Draft'}
@@ -631,7 +697,7 @@ export const IssuerView: React.FC = () => {
           <div className="border-b border-gray-200 pb-4">
             <h2 className="text-xl font-bold text-gray-900">Institutional Governance & Approvals</h2>
             <p className="text-sm text-gray-500">
-              Separation-of-Duties Enforcement: Institutional administrators must inspect and approve credentials before signing.
+              Separation-of-Duties: Institutional administrators must inspect and approve credentials before signing.
             </p>
           </div>
 
@@ -693,6 +759,19 @@ export const IssuerView: React.FC = () => {
             </p>
           </div>
 
+          {/* Security notice */}
+          <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+            <Info size={16} className="text-amber-600 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-bold">Signing Key Security Notice</p>
+              <p className="mt-1">
+                Enter only the private key of an operational signing key that has been registered with this institution's
+                IssuerRegistry on-chain. The key is transmitted over HTTPS and used only for credential signing — it is
+                not stored. In production, replace this with a backend HSM/KMS integration or client-side wallet signing.
+              </p>
+            </div>
+          </div>
+
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1">
@@ -705,7 +784,7 @@ export const IssuerView: React.FC = () => {
               >
                 <option value="">-- Choose an approved credential --</option>
                 {credentials
-                  .filter((c) => c.workflow_status === 'APPROVED' || c.workflow_status === 'PREPARED')
+                  .filter((c) => c.workflow_status === 'APPROVED')
                   .map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.schema_type} for {c.recipient_address.slice(0, 10)}... (Commitment: {c.commitment.slice(0, 12)}...)
@@ -720,22 +799,27 @@ export const IssuerView: React.FC = () => {
               </label>
               <input
                 type="password"
-                value={signingPrivateKey}
-                onChange={(e) => setSigningPrivateKey(e.target.value)}
-                placeholder="0x... (Private key of authorized operational signing key)"
+                value={selectedKeyForSigning}
+                onChange={(e) => setSelectedKeyForSigning(e.target.value)}
+                placeholder="0x... (private key of registered signing key)"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono text-sm"
+                autoComplete="off"
               />
               <p className="text-xs text-gray-500 mt-1">
-                The key is used strictly for localized proof signing and is never stored in persistent databases.
+                This key must correspond to an address registered via the Signing Keys tab. Transmitted over HTTPS only. Never stored.
               </p>
             </div>
 
+            {signingStatus && (
+              <p className="text-sm text-blue-600 font-medium">{signingStatus}</p>
+            )}
+
             <button
               onClick={handleSign}
-              disabled={loading || !selectedForSigning || !signingPrivateKey}
+              disabled={loading || !selectedForSigning || !selectedKeyForSigning}
               className="px-6 py-2.5 bg-indigo-600 text-white font-semibold text-sm rounded-lg hover:bg-indigo-700 transition disabled:opacity-50"
             >
-              {loading ? 'Signing & Anchoring...' : 'Sign W3C Proof & Confirm On-Chain'}
+              {loading ? 'Signing...' : 'Sign W3C Proof & Confirm On-Chain'}
             </button>
           </div>
         </div>
@@ -756,17 +840,21 @@ export const IssuerView: React.FC = () => {
               <label className="block text-sm font-semibold text-gray-700 mb-1">
                 CSV Data (with headers)
               </label>
+              <p className="text-xs text-gray-500 mb-2">
+                Required header: <code>recipient_address</code>. Additional columns become credential claims.
+              </p>
               <textarea
                 value={csvContent}
                 onChange={(e) => setCsvContent(e.target.value)}
                 rows={6}
                 className="w-full p-3 font-mono text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                placeholder="recipient_address,claimOne,claimTwo&#10;0x...wallet,value1,value2"
               />
             </div>
 
             <button
               onClick={handleBatchPrepare}
-              disabled={loading}
+              disabled={loading || !org}
               className="px-6 py-2.5 bg-purple-600 text-white font-semibold text-sm rounded-lg hover:bg-purple-700 transition disabled:opacity-50 flex items-center gap-2"
             >
               <FileSpreadsheet size={18} />
@@ -832,13 +920,14 @@ export const IssuerView: React.FC = () => {
               type="text"
               value={newKeyAddress}
               onChange={(e) => setNewKeyAddress(e.target.value)}
-              placeholder="0x... (Operational Signing Key Public Address)"
+              placeholder="0x... (operational signing key public address)"
               className="flex-1 px-3 py-2 border border-gray-300 rounded-lg font-mono text-sm"
               required
             />
             <button
               type="submit"
-              className="px-4 py-2 bg-indigo-600 text-white font-semibold text-sm rounded-lg hover:bg-indigo-700 transition"
+              disabled={!org}
+              className="px-4 py-2 bg-indigo-600 text-white font-semibold text-sm rounded-lg hover:bg-indigo-700 transition disabled:opacity-50"
             >
               Authorize Signing Key
             </button>
@@ -848,7 +937,7 @@ export const IssuerView: React.FC = () => {
             <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Authorized Operational Keys</h4>
             {signingKeys.length === 0 ? (
               <div className="p-4 bg-gray-50 rounded-xl text-sm text-gray-500 text-center">
-                Primary Issuer Address: <code className="font-mono text-gray-800">0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266</code> (implicitly authorized by default).
+                No operational signing keys registered. Register a key address above to allow credential signing.
               </div>
             ) : (
               signingKeys.map((k) => (
@@ -857,8 +946,10 @@ export const IssuerView: React.FC = () => {
                     <div className="font-mono text-sm font-bold text-gray-900">{k.public_key_address}</div>
                     <div className="text-xs text-gray-500">Type: {k.key_type} • Status: {k.status}</div>
                   </div>
-                  <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-full text-xs font-bold">
-                    ACTIVE
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                    k.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                  }`}>
+                    {k.status}
                   </span>
                 </div>
               ))

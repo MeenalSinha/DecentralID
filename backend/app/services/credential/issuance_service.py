@@ -105,7 +105,7 @@ class IssuanceService:
         if not has_perm:
             raise TenantAccessDeniedException("Not authorized to sign credentials for this organization.")
 
-        if cred.workflow_status not in [CredentialWorkflowStatus.APPROVED.value, CredentialWorkflowStatus.PREPARED.value]:
+        if cred.workflow_status not in [CredentialWorkflowStatus.APPROVED.value]:
             raise InvalidStatusTransitionException(f"Cannot sign credential with status '{cred.workflow_status}'.")
 
         # Fetch organization

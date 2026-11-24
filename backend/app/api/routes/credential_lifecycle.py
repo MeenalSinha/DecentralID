@@ -15,6 +15,7 @@ from backend.app.schemas.lifecycle import (
 )
 from backend.app.services.lifecycle.lifecycle_service import CredentialLifecycleService
 from backend.app.services.lifecycle.status_list_service import BitstringStatusListService
+from backend.app.core.config import settings
 
 router = APIRouter(tags=["Credential Lifecycle & Status Management"])
 
@@ -133,6 +134,6 @@ async def get_status_list_credential(
     org_res = await db.execute(org_stmt)
     org = org_res.scalar_one_or_none()
     issuer_addr = (org.on_chain_address if org and org.on_chain_address else "").lower()
-    issuer_did = f"did:pkh:eip155:1337:{issuer_addr}"
+    issuer_did = f"did:pkh:eip155:{settings.CHAIN_ID}:{issuer_addr}"
 
     return BitstringStatusListService.generate_status_list_credential(slist, issuer_did)

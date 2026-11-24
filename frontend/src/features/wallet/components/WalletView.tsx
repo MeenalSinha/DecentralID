@@ -34,7 +34,6 @@ interface CredentialItem {
   issued_at?: string;
   valid_until?: string;
   claims: Record<string, any>;
-  salt: string;
   w3c_document: Record<string, any>;
 }
 
@@ -83,7 +82,6 @@ export const WalletView: React.FC = () => {
     try {
       const res = await apiPost<any>('/verification/verify', {
         credential: cred.w3c_document,
-        salt: cred.salt,
       });
       setVerificationResults((prev) => ({
         ...prev,

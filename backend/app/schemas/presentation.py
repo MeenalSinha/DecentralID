@@ -44,7 +44,6 @@ class HolderCredentialDetail(BaseModel):
     issued_at: Optional[datetime.datetime] = None
     valid_until: Optional[datetime.datetime] = None
     claims: Dict[str, Any]
-    salt: str
     w3c_document: Dict[str, Any]
 
 class HolderCredentialsResponse(BaseModel):
