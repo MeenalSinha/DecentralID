@@ -109,5 +109,43 @@ describe("CredentialStatusRegistry Unit Tests (Phase 4)", function () {
         statusRegistry.connect(institution).suspendCredential(nonExistentId, "test")
       ).to.be.revertedWithCustomError(statusRegistry, "CredentialNotFound");
     });
+
+    it("should revert getCredentialStatus with CredentialNotFound for non-existent credentials", async function () {
+      const nonExistentId = ethers.id("random-unregistered-credential-id");
+      await expect(
+        statusRegistry.getCredentialStatus(nonExistentId)
+      ).to.be.revertedWithCustomError(statusRegistry, "CredentialNotFound");
+    });
+
+    it("should reject status reason strings exceeding 128 bytes to prevent PII and gas griefing", async function () {
+      const longReason = "A".repeat(129);
+      await expect(
+        statusRegistry.connect(institution).suspendCredential(sampleCredentialId, longReason)
+      ).to.be.revertedWithCustomError(statusRegistry, "ReasonTooLong");
+
+      await expect(
+        statusRegistry.connect(institution).revokeCredential(sampleCredentialId, longReason)
+      ).to.be.revertedWithCustomError(statusRegistry, "ReasonTooLong");
+    });
+
+    it("should permit emergency revocation during pause while blocking non-critical transitions", async function () {
+      // Pause registry
+      await statusRegistry.connect(admin).pause();
+
+      // Suspend must be blocked
+      await expect(
+        statusRegistry.connect(institution).suspendCredential(sampleCredentialId, "suspension attempt")
+      ).to.be.revertedWithCustomError(statusRegistry, "EnforcedPause");
+
+      // Emergency revocation must SUCCEED even when paused
+      await expect(
+        statusRegistry.connect(institution).revokeCredential(sampleCredentialId, "Emergency pause revocation")
+      )
+        .to.emit(statusRegistry, "CredentialStatusChanged")
+        .withArgs(sampleCredentialId, 0, 2, institution.address, "Emergency pause revocation");
+
+      const [statusRevoked] = await statusRegistry.getCredentialStatus(sampleCredentialId);
+      expect(statusRevoked).to.equal(2);
+    });
   });
 });

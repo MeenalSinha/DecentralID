@@ -48,7 +48,7 @@ async def verify_wallet(
         signature=payload.signature,
     )
 
-    # Set secure HTTP-only cookie
+    # Set secure HTTP-only cookie (Never expose raw session token in JSON response body)
     response.set_cookie(
         key=settings.SESSION_COOKIE_NAME,
         value=session_token,
@@ -63,7 +63,6 @@ async def verify_wallet(
         user_id=user.id,
         wallet_address=payload.wallet_address,
         role=user.role,
-        session_token=session_token,
         expires_at=expires_at,
     )
 
@@ -73,7 +72,7 @@ async def logout(
     session: Session = Depends(get_current_session),
     db: AsyncSession = Depends(get_db),
 ):
-    await AuthenticationService.invalidate_session(db, session.id)
+    await AuthenticationService.invalidate_session_by_hash(db, session.id)
     response.delete_cookie(key=settings.SESSION_COOKIE_NAME, path="/")
     return {"status": "logged_out", "message": "Session successfully invalidated."}
 

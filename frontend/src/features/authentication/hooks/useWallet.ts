@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { BrowserProvider, JsonRpcSigner } from 'ethers';
+import { fetchApi } from '../../../app/config/api';
 
 declare global {
   interface Window {
@@ -51,7 +52,12 @@ export function useWallet() {
     }
   }, [updateWalletState]);
 
-  const disconnectWallet = useCallback(() => {
+  const disconnectWallet = useCallback(async () => {
+    try {
+      await fetchApi('/authentication/logout', { method: 'POST' });
+    } catch {
+      // Ignore if session already absent or network error
+    }
     setAccount(null);
     setSigner(null);
     setProvider(null);
@@ -59,7 +65,14 @@ export function useWallet() {
 
   useEffect(() => {
     if (window.ethereum) {
-      const handleAccountsChanged = (accounts: string[]) => {
+      const handleAccountsChanged = async (accounts: string[]) => {
+        // Invalidate backend session on wallet switch to prevent session hijacking/stale identity
+        try {
+          await fetchApi('/authentication/logout', { method: 'POST' });
+        } catch {
+          // Ignore logout error
+        }
+
         if (accounts.length === 0) {
           disconnectWallet();
         } else if (provider) {

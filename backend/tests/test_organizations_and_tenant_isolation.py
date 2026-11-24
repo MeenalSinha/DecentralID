@@ -32,7 +32,7 @@ async def authenticate_user(client, account=None):
             "signature": signature,
         },
     )
-    session_token = verify_res.json()["session_token"]
+    session_token = verify_res.cookies.get("decentralid_session")
     user_id = verify_res.json()["user_id"]
     return account, session_token, user_id
 

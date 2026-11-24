@@ -146,6 +146,22 @@ describe("IssuerRegistry Unit Tests (Phase 4)", function () {
       ).to.be.false;
     });
 
+    it("should consider key expired at the exact validUntil boundary timestamp", async function () {
+      const block = await ethers.provider.getBlock("latest");
+      const validUntil = block.timestamp + 50;
+
+      await issuerRegistry.connect(institution).registerSigningKey(operatorKey.address, validUntil);
+      
+      // Fast forward exactly to validUntil
+      await ethers.provider.send("evm_setNextBlockTimestamp", [validUntil]);
+      await ethers.provider.send("evm_mine");
+
+      // Boundary check: block.timestamp >= validUntil returns false
+      expect(
+        await issuerRegistry.isSigningKeyValid(institution.address, operatorKey.address)
+      ).to.be.false;
+    });
+
     it("should allow key revocation by issuer", async function () {
       await issuerRegistry.connect(institution).registerSigningKey(operatorKey.address, 0);
       await expect(issuerRegistry.connect(institution).revokeSigningKey(operatorKey.address))

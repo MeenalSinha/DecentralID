@@ -1,5 +1,6 @@
 import secrets
 import datetime
+import hashlib
 from typing import Optional, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
@@ -24,6 +25,17 @@ class AuthenticationService:
         domain: str,
         uri: str,
     ) -> Tuple[str, str, str]:
+        # Validate domain against whitelist to prevent phishing attacks (EIP-4361 requirement)
+        if domain not in settings.ALLOWED_SIWE_DOMAINS:
+            logger.warning(
+                f"Unauthorized domain in challenge request: {domain}",
+                extra={"event": "AUTH_INVALID_DOMAIN", "domain": domain}
+            )
+            raise AuthenticationFailedException(f"Domain '{domain}' is not authorized for authentication.")
+
+        if not (uri.startswith("http://") or uri.startswith("https://")):
+            raise AuthenticationFailedException("Authentication URI must use http or https protocol.")
+
         # Generate cryptographically secure 32-hex-char nonce
         nonce = secrets.token_hex(16)
         now = datetime.datetime.now(datetime.timezone.utc)
@@ -80,7 +92,7 @@ class AuthenticationService:
             logger.warning(f"Nonce not found: {nonce}", extra={"event": "AUTH_NONCE_NOT_FOUND"})
             raise NonceExpiredOrInvalidException("Challenge nonce was not found.")
 
-        # 2. Check if already used (Replay attack prevention)
+        # 2. Check if already used
         if challenge.is_used:
             logger.warning(
                 f"Replay attack detected for nonce {nonce} from wallet {wallet_address}",
@@ -89,19 +101,37 @@ class AuthenticationService:
             raise NonceExpiredOrInvalidException("Challenge nonce has already been consumed (replay prevention).")
 
         # 3. Check expiration
-        # Note: SQLite may return naive datetime; ensure timezone-aware comparison
         exp = challenge.expires_at
         if exp.tzinfo is None:
             exp = exp.replace(tzinfo=datetime.timezone.utc)
 
         if now > exp:
             logger.warning(f"Expired nonce {nonce}", extra={"event": "AUTH_NONCE_EXPIRED"})
-            challenge.is_used = True
+            await db.execute(
+                update(AuthChallenge)
+                .where(AuthChallenge.nonce == nonce)
+                .values(is_used=True)
+            )
             await db.commit()
             raise NonceExpiredOrInvalidException("Authentication challenge has expired.")
 
-        # 4. Atomically consume nonce
-        challenge.is_used = True
+        # 4. Atomically consume nonce to eliminate concurrent replay race conditions
+        consume_stmt = (
+            update(AuthChallenge)
+            .where(
+                AuthChallenge.nonce == nonce,
+                AuthChallenge.wallet_address == wallet_address.lower(),
+                AuthChallenge.is_used == False,
+            )
+            .values(is_used=True)
+        )
+        consume_res = await db.execute(consume_stmt)
+        if consume_res.rowcount != 1:
+            logger.warning(
+                f"Concurrent nonce consumption race detected for nonce {nonce}",
+                extra={"event": "AUTH_CONCURRENCY_RACE_DETECTED", "wallet": wallet_address}
+            )
+            raise NonceExpiredOrInvalidException("Challenge nonce has already been consumed (replay prevention).")
 
         # 5. Reconstruct message and verify cryptographic signature
         message = WalletVerificationService.construct_siwe_message(
@@ -155,12 +185,13 @@ class AuthenticationService:
             )
             db.add(wallet)
 
-        # 7. Generate session token
-        session_token = secrets.token_urlsafe(32)
+        # 7. Generate session token and store its cryptographic SHA-256 hash in DB
+        raw_session_token = secrets.token_urlsafe(32)
+        session_token_hash = hashlib.sha256(raw_session_token.encode("utf-8")).hexdigest()
         session_expires = now + datetime.timedelta(seconds=settings.SESSION_EXPIRE_SECONDS)
 
         session = Session(
-            id=session_token,
+            id=session_token_hash,
             user_id=user.id,
             wallet_address=wallet_address.lower(),
             expires_at=session_expires,
@@ -173,11 +204,16 @@ class AuthenticationService:
             f"Successful authentication for user {user.id} (wallet: {wallet_address})",
             extra={"event": "AUTH_SUCCESS", "user_id": user.id, "wallet": wallet_address}
         )
-        return user, session_token, session_expires.isoformat()
+        return user, raw_session_token, session_expires.isoformat()
 
     @staticmethod
-    async def invalidate_session(db: AsyncSession, session_token: str) -> None:
-        stmt = update(Session).where(Session.id == session_token).values(is_revoked=True)
+    async def invalidate_session(db: AsyncSession, raw_session_token: str) -> None:
+        token_hash = hashlib.sha256(raw_session_token.encode("utf-8")).hexdigest()
+        await AuthenticationService.invalidate_session_by_hash(db, token_hash)
+
+    @staticmethod
+    async def invalidate_session_by_hash(db: AsyncSession, session_id_hash: str) -> None:
+        stmt = update(Session).where(Session.id == session_id_hash).values(is_revoked=True)
         await db.execute(stmt)
         await db.commit()
-        logger.info(f"Invalidated session: {session_token[:8]}...", extra={"event": "SESSION_REVOKED"})
+        logger.info("Invalidated session successfully.", extra={"event": "SESSION_REVOKED"})

@@ -46,12 +46,12 @@ Replace the monolithic, gameable `IdentityReputation.sol` architecture with a mo
 ## 3. Automated Tests Executed
 Command: `npx hardhat test`
 - Baseline tests & defect proofs: 14 passing
-- IssuerRegistry unit tests: 11 passing
+- IssuerRegistry unit tests: 13 passing (includes exact validity boundary test)
 - CredentialRegistry unit tests: 6 passing
-- CredentialStatusRegistry unit tests: 5 passing
+- CredentialStatusRegistry unit tests: 8 passing (includes existence check, 128-byte reason limit, pause semantics)
 - Cross-Contract integration tests: 1 passing
 - Invariant property tests: 1 passing (5 property loops)
-- **Total Passing:** 39 tests passed, 0 failed.
+- **Total Passing:** 43 tests passed, 0 failed.
 
 ---
 

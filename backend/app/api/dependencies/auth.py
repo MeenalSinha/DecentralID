@@ -1,4 +1,5 @@
 import datetime
+import hashlib
 from typing import Optional, List
 from fastapi import Request, Depends, status, Header
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,8 +26,9 @@ async def get_current_session(
     if not token:
         raise AuthenticationFailedException("Authentication required: no active session token found.")
 
-    # 3. Query DB
-    stmt = select(Session).where(Session.id == token)
+    # 3. Query DB using cryptographic SHA-256 hash of the token
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    stmt = select(Session).where(Session.id == token_hash)
     res = await db.execute(stmt)
     session = res.scalar_one_or_none()
 

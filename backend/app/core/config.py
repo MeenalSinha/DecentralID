@@ -1,6 +1,6 @@
 from typing import List, Optional
 import os
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     CHALLENGE_EXPIRE_SECONDS: int = Field(default=300) # 5 minutes
     SECURE_COOKIE: bool = Field(default=False) # True in production (HTTPS)
     SAME_SITE_COOKIE: str = Field(default="lax")
+
+    # Allowed SIWE Domains
+    ALLOWED_SIWE_DOMAINS: List[str] = Field(
+        default=["localhost", "127.0.0.1", "decentralid.org", "app.decentralid.org"]
+    )
 
     # Database
     DATABASE_URL: str = Field(default="sqlite+aiosqlite:///./decentralid.db")
@@ -49,5 +54,14 @@ class Settings(BaseSettings):
         if v.startswith("postgresql://") and "+asyncpg" not in v:
             return v.replace("postgresql://", "postgresql+asyncpg://", 1)
         return v
+
+    @model_validator(mode="after")
+    def validate_production_security(self) -> "Settings":
+        if self.ENVIRONMENT.lower() == "production":
+            if "default-development" in self.SECRET_KEY or len(self.SECRET_KEY) < 32:
+                raise ValueError("In production, SECRET_KEY must be a cryptographically secure random value with at least 32 characters.")
+            if not self.SECURE_COOKIE:
+                raise ValueError("In production, SECURE_COOKIE must be enabled (True) for HTTPS security.")
+        return self
 
 settings = Settings()

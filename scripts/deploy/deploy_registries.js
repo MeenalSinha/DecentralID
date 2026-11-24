@@ -56,7 +56,7 @@ async function main() {
     blockNumber: await hre.ethers.provider.getBlockNumber(),
   };
 
-  const outputDir = path.join(__dirname, "../../deployments/local");
+  const outputDir = path.join(__dirname, `../../deployments/${network}`);
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
   }

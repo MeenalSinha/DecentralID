@@ -62,11 +62,12 @@ async def test_successful_wallet_authentication_and_session(client):
     assert verify_res.status_code == 200
     verify_data = verify_res.json()
     assert verify_data["wallet_address"].lower() == account.address.lower()
-    assert "session_token" in verify_data
-    session_token = verify_data["session_token"]
+    
+    # SECURITY AUDIT VALIDATION: Raw session token must NOT be exposed in JSON response body
+    assert "session_token" not in verify_data
+    assert "decentralid_session" in verify_res.cookies
 
-    # 4. Access protected session endpoint using session cookie
-    client.cookies.set("decentralid_session", session_token)
+    # 4. Access protected session endpoint using session cookie automatically preserved by client
     session_res = await client.get("/api/v1/authentication/session")
     assert session_res.status_code == 200
     session_info = session_res.json()
@@ -164,3 +165,73 @@ async def test_invalid_signature_rejection(client):
     assert res.status_code == 401
     assert res.json()["error"]["code"] == "INVALID_SIGNATURE"
     assert "Signature recovery failed" in res.json()["error"]["message"]
+
+@pytest.mark.asyncio
+async def test_unapproved_domain_rejection(client):
+    account = Account.create()
+    res = await client.post(
+        "/api/v1/authentication/challenge",
+        json={
+            "wallet_address": account.address,
+            "chain_id": 31337,
+            "domain": "malicious-phishing-attacker.com",
+            "uri": "https://malicious-phishing-attacker.com/login",
+        },
+    )
+    assert res.status_code == 401
+    assert "not authorized" in res.json()["error"]["message"]
+
+@pytest.mark.asyncio
+async def test_atomic_concurrent_nonce_consumption(client):
+    import asyncio
+    account = Account.create()
+
+    challenge_res = await client.post(
+        "/api/v1/authentication/challenge",
+        json={
+            "wallet_address": account.address,
+            "chain_id": 31337,
+            "domain": "localhost",
+            "uri": "http://localhost:5173",
+        },
+    )
+    assert challenge_res.status_code == 201
+    challenge_data = challenge_res.json()
+    message = challenge_data["message"]
+    nonce = challenge_data["nonce"]
+
+    signable_message = encode_defunct(text=message)
+    signed = account.sign_message(signable_message)
+    signature = f"0x{signed.signature.hex()}" if not signed.signature.hex().startswith("0x") else signed.signature.hex()
+
+    payload = {
+        "wallet_address": account.address,
+        "nonce": nonce,
+        "signature": signature,
+    }
+
+    # Execute concurrent requests simultaneously
+    res1, res2 = await asyncio.gather(
+        client.post("/api/v1/authentication/verify-wallet", json=payload),
+        client.post("/api/v1/authentication/verify-wallet", json=payload),
+    )
+
+    statuses = sorted([res1.status_code, res2.status_code])
+    # Exactly one request must succeed (200), and the second must be rejected (401)
+    assert statuses == [200, 401]
+
+def test_production_security_validation():
+    from backend.app.core.config import Settings
+    with pytest.raises(ValueError, match="SECRET_KEY must be a cryptographically secure random value"):
+        Settings(
+            ENVIRONMENT="production",
+            SECRET_KEY="decentralid-default-development-secret-key-change-in-prod-32bytes",
+            SECURE_COOKIE=True,
+        )
+
+    with pytest.raises(ValueError, match="SECURE_COOKIE must be enabled"):
+        Settings(
+            ENVIRONMENT="production",
+            SECRET_KEY="a" * 32,
+            SECURE_COOKIE=False,
+        )

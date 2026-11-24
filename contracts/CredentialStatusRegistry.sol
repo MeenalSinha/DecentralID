@@ -24,6 +24,7 @@ contract CredentialStatusRegistry is ICredentialStatusRegistry, AccessControl, P
     error CredentialAlreadyRevoked(bytes32 credentialId);
     error InvalidStatusTransition(CredentialStatus current, CredentialStatus requested);
     error UnauthorizedCaller(address caller);
+    error ReasonTooLong();
 
     mapping(bytes32 => StatusRecord) private _statuses;
 
@@ -67,6 +68,8 @@ contract CredentialStatusRegistry is ICredentialStatusRegistry, AccessControl, P
         bytes32 credentialId,
         string calldata reason
     ) external override onlyAuthorizedUpdater(credentialId) whenNotPaused {
+        if (bytes(reason).length > 128) revert ReasonTooLong();
+
         StatusRecord storage rec = _statuses[credentialId];
         CredentialStatus current = rec.status;
 
@@ -97,6 +100,8 @@ contract CredentialStatusRegistry is ICredentialStatusRegistry, AccessControl, P
         bytes32 credentialId,
         string calldata reason
     ) external override onlyAuthorizedUpdater(credentialId) whenNotPaused {
+        if (bytes(reason).length > 128) revert ReasonTooLong();
+
         StatusRecord storage rec = _statuses[credentialId];
         CredentialStatus current = rec.status;
 
@@ -122,11 +127,15 @@ contract CredentialStatusRegistry is ICredentialStatusRegistry, AccessControl, P
 
     /**
      * @notice Permanently revoke a credential. Irreversible terminal transition.
+     * @dev Intentionally exempt from whenNotPaused: emergency revocation of compromised
+     * or fraudulent credentials must never be blocked during a system-wide pause.
      */
     function revokeCredential(
         bytes32 credentialId,
         string calldata reason
     ) external override onlyAuthorizedUpdater(credentialId) {
+        if (bytes(reason).length > 128) revert ReasonTooLong();
+
         StatusRecord storage rec = _statuses[credentialId];
         CredentialStatus current = rec.status;
 
@@ -152,6 +161,9 @@ contract CredentialStatusRegistry is ICredentialStatusRegistry, AccessControl, P
     function getCredentialStatus(
         bytes32 credentialId
     ) external view override returns (CredentialStatus status, uint256 updatedAt) {
+        if (!credentialRegistry.credentialExists(credentialId)) {
+            revert CredentialNotFound(credentialId);
+        }
         StatusRecord memory rec = _statuses[credentialId];
         return (rec.status, rec.updatedAt);
     }

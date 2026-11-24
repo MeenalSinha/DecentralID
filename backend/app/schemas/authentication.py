@@ -23,7 +23,6 @@ class AuthResponse(BaseModel):
     user_id: str
     wallet_address: str
     role: str
-    session_token: str
     expires_at: str
 
 class SessionResponse(BaseModel):

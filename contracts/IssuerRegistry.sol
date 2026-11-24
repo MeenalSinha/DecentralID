@@ -185,7 +185,7 @@ contract IssuerRegistry is IIssuerRegistry, AccessControl, Pausable {
             return false;
         }
 
-        if (keyInfo.validUntil != 0 && block.timestamp > keyInfo.validUntil) {
+        if (keyInfo.validUntil != 0 && block.timestamp >= keyInfo.validUntil) {
             return false;
         }
 
