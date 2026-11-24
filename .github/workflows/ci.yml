@@ -59,6 +59,9 @@ jobs:
       - name: Lint Frontend
         working-directory: ./frontend
         run: npm run lint
+      - name: Type-Check Frontend
+        working-directory: ./frontend
+        run: npx tsc --noEmit
       - name: Build Frontend
         working-directory: ./frontend
         run: npm run build
