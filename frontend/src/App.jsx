@@ -114,25 +114,12 @@ const useContract = (signer) => {
 };
 
 const uploadToIPFS = async (data) => {
-  try {
-    const response = await fetch('https://api.pinata.cloud/pinning/pinJSONToIPFS', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'pinata_api_key': 'c9bb141f1e054cbf3712',
-        'pinata_secret_api_key': '4d6fd58e7a4a334c07fe440c8a8e8c08cb4a7c8154a8d235b32c8ac923e9776f'
-      },
-      body: JSON.stringify({
-        pinataContent: data,
-        pinataMetadata: { name: `identity-${data.address}` }
-      })
-    });
-    const result = await response.json();
-    return result.IpfsHash;
-  } catch (error) {
-    const mockHash = 'Qm' + Math.random().toString(36).substring(2, 15);
-    return mockHash;
-  }
+  // SECURITY REMEDIATION (Phase 0):
+  // Exposed client-side credentials have been removed. Direct browser pinning with hardcoded secret keys is unsafe.
+  // Direct client uploads without backend credentials must throw explicit error rather than fabricating fake hashes.
+  throw new Error(
+    "Direct client-side IPFS upload is disabled for security reasons. Please use the authenticated backend service to pin files."
+  );
 };
 
 const fetchFromIPFS = async (ipfsHash) => {

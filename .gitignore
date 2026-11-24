@@ -50,6 +50,18 @@ frontend/.next/
 frontend/out/
 frontend/build/
 
+# Python & Backend
+backend/venv/
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.db
+*.sqlite
+*.sqlite3
+.pytest_cache/
+
 # Deployment records (optional - you may want to commit these)
 # deployments/*.json
 

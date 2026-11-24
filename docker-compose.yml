@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: decentralid-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: decentralid
+      POSTGRES_USER: decentralid_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-decentralid_secure_dev_password}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U decentralid_user -d decentralid"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: decentralid-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: development
+      DEBUG: "true"
+      DATABASE_URL: postgresql+asyncpg://decentralid_user:${POSTGRES_PASSWORD:-decentralid_secure_dev_password}@db:5432/decentralid
+      SECRET_KEY: ${BACKEND_SECRET_KEY:-decentralid_dev_secret_key_32bytes_min}
+      CORS_ORIGINS: '["http://localhost:5173", "http://localhost:80", "http://localhost"]'
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: decentralid-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+
+volumes:
+  postgres_data:
