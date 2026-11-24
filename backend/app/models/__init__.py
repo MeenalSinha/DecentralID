@@ -9,6 +9,7 @@ from backend.app.models.presentation import PresentationShare
 from backend.app.models.status_list import StatusList
 from backend.app.models.intelligence import DocumentUpload, ExtractedCredentialData
 from backend.app.models.network import ApiKey, WebhookSubscription, WebhookDelivery, StorageRecord
+from backend.app.models.governance import InstitutionAccreditation, GovernanceAuditLog
 
 __all__ = [
     "TimestampMixin",
@@ -30,4 +31,6 @@ __all__ = [
     "WebhookSubscription",
     "WebhookDelivery",
     "StorageRecord",
+    "InstitutionAccreditation",
+    "GovernanceAuditLog",
 ]

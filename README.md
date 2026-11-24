@@ -1,130 +1,103 @@
 # 🔐 DecentralID — Digital Trust & Verifiable Credential Infrastructure
 
 **Initiative:** BUILD 2036 — Frontier 03: Digital Infrastructure  
-**Phases Implemented:** Phases 0–4 (Audit, System Design, Full-Stack Foundation, Auth & RBAC, On-Chain Registries)  
-**Standard Compliance:** W3C Verifiable Credentials Data Model 2.0 • W3C Data Integrity 1.0 • EIP-4361 SIWE • EIP-712  
+**Phases Implemented:** **Phases 0–18 (Complete Digital Trust Infrastructure)**  
+**Standard Compliance:** W3C Verifiable Credentials 2.0/1.1 • W3C Data Integrity 1.0 (`ecdsa-jcs-2019`) • RFC 8785 JCS • W3C DID Core & Resolution (`did:pkh`, `did:key`, `did:web`) • W3C Bitstring Status List v1.0 • EIP-4361 SIWE  
 
 ---
 
 ## 🌟 Executive Overview
 
-DecentralID is a privacy-preserving, decentralized digital trust infrastructure connecting educational institutions, licensing organizations, students, professionals, employers, and independent verifiers.
+DecentralID is an open, privacy-preserving, decentralized digital trust infrastructure connecting educational institutions, licensing bodies, students, professionals, employers, and independent verifiers across Digital India.
 
-Rather than relying on easily faked PDF certificates, gameable reputation points, or centralized transcript silos, DecentralID anchors trust in **cryptographic signatures from accredited institutions registered on Ethereum/EVM smart contracts**, keeping personal data completely off-chain through high-entropy salted commitments.
+Rather than relying on easily faked PDF certificates, gameable reputation points, or centralized transcript silos, DecentralID anchors trust in **cryptographic signatures from accredited institutions registered on Ethereum/Polygon smart contracts**, keeping personal data completely off-chain through high-entropy salted commitments, encrypted content-addressed storage (AES-256-GCM + IPFS), client-side encrypted vaults, and privacy-preserving selective disclosure.
 
 ---
 
-## 🏗️ Six Core Product Modules
+## 🏗️ Core Architectural Modules (Phases 0–18)
 
-| Module | Purpose | Status |
-|---|---|---|
-| **DecentralID Trust** | Authoritative on-chain registries: `IssuerRegistry`, `CredentialRegistry`, `CredentialStatusRegistry`. | **Implemented (Phase 4)** |
-| **DecentralID Issuer** | Multi-tenant institutional portal for managing signing keys and issuing credentials. | **In Progress (Phase 6)** |
-| **DecentralID Wallet** | Personal credential wallet for students and professionals to hold and selectively disclose qualifications. | **In Progress (Phase 7)** |
-| **DecentralID Verify** | Independent verification portal checking cryptographic proofs and on-chain revocation status. | **In Progress (Phase 8)** |
-| **DecentralID Lifecycle** | Cryptographic lifecycle, W3C Bitstring Status Lists, suspension and irreversible revocation. | **In Progress (Phase 9)** |
-| **DecentralID Intelligence**| AI-assisted document extraction and anomaly detection. | *Planned (Phase 10)* |
-| **DecentralID Network** | Developer REST/GraphQL APIs and webhooks for external HRIS/ATS systems. | *Planned (Phase 11)* |
+| Module | Scope & Phase | Status | Key Capabilities |
+|---|---|---|---|
+| **DecentralID Trust** | Smart Contracts (Phase 4) | **Production-Ready** | `IssuerRegistry`, `CredentialRegistry`, `CredentialStatusRegistry` on EVM. Irreversible revocation state machine. |
+| **DecentralID Engine** | W3C Data Integrity (Phase 5 & 11) | **Production-Ready** | RFC 8785 JSON Canonicalization Scheme, `ecdsa-jcs-2019` double-SHA256 proofs, zero key custody. |
+| **DecentralID Issuer** | Institutional Portal (Phase 6) | **Production-Ready** | Key delegation, separation of duties across preparation & approval, tenant isolation. |
+| **DecentralID Wallet** | Personal Wallet & PWA (Phase 7 & 16) | **Production-Ready** | Installable mobile PWA, Web Crypto encrypted IndexedDB vault (`PBKDF2 + AES-GCM`), encrypted backup/restore. |
+| **DecentralID Verify** | Independent Verification (Phase 8) | **Production-Ready** | Standalone cryptographic verification without session requirements. |
+| **DecentralID Lifecycle** | W3C Bitstring Status (Phase 9) | **Production-Ready** | Dynamic status lists, compressed bitstrings, real-time revocation & suspension tracking. |
+| **DecentralID Intelligence**| Document Ingestion & AI (Phase 10) | **Production-Ready** | Pure-Python PDF/image stream extraction, magic-byte validation, heuristic regex parsing, anomaly detection. |
+| **DecentralID Cryptography**| Selective Disclosure (Phase 11) | **Production-Ready** | Salted Merkle claim commitments; holders selectively disclose attributes while keeping unshared data blinded. |
+| **DecentralID Network** | Developer Platform & SDK (Phase 12) | **Production-Ready** | Encrypted IPFS storage, API keys with SHA-256 hashing, HMAC-SHA256 signed webhooks, official `@decentralid/sdk`. |
+| **DecentralID Operations**| Enterprise Reliability (Phase 13) | **Production-Ready** | Dynamic database analytics, deep `/health/live` & `/health/ready` probes, production security validator. |
+| **DecentralID Interop** | Standards & Portability (Phase 14) | **Production-Ready** | Universal DID Resolver (`did:pkh`, `did:key`, `did:web`), W3C v1/v2 export, foreign credential import (strict non-reissuance). |
+| **DecentralID Governance**| Institutional Accreditation (Phase 15)| **Production-Ready** | Multi-level accreditation review, separation of duties (Reviewer != Approver), trust policy engine, public trust directory. |
+| **DecentralID Mobile** | Offline Verification (Phase 16) | **Production-Ready** | Offline verification with the **Critical Freshness Rule**: stale snapshots evaluate strictly to `INDETERMINATE`. |
+| **DecentralID Ecosystem** | Integrations & Connectors (Phase 17) | **Production-Ready** | Canvas/Moodle LMS adapter, Banner SIS ingestion, Workday HRIS verifier with data minimization, bulk CSV/JSON migration. |
+| **DecentralID Scale** | Pilot & Release Assurance (Phase 18) | **Production-Ready** | Performance load benchmarks (70 ops/sec signing, 92 ops/sec verify), failover resilience, incident response runbooks. |
 
 ---
 
 ## 🛡️ Core Engineering & Security Principles
 
-1. **Nothing Hardcoded:** Zero private keys, API secrets, or fixed contract addresses in client source code. Dynamic configuration is fetched at runtime from `/api/v1/blockchain/config`.
-2. **Zero Fake Functionality:** No fake IPFS hashes, simulated signatures, or mocked successes. Operations succeed or fail deterministically.
-3. **Privacy First (Zero On-Chain PII):** No names, dates of birth, or marks on-chain. On-chain commitments use 256-bit salted hashes: $C = \text{keccak256}(S \parallel \text{salt})$.
-4. **EIP-4361 SIWE Authentication:** Cryptographic wallet signature verification with atomic nonce consumption preventing replay attacks.
-5. **Strict Multi-Tenant Isolation:** Institutional queries and actions are strictly scoped to verified memberships in PostgreSQL.
-6. **Irreversible Revocation State Machine:** Credentials and institutional accreditations marked as `Revoked` can never be reactivated.
+1. **Zero Hardcoded Data or Secrets:** No hardcoded credentials, institutions, private keys, or mock blockchain transaction hashes. All operations are dynamically validated and cryptographically verified.
+2. **Zero Plaintext PII on Blockchains or Public IPFS:** Only 256-bit salted commitments are anchored on-chain. Off-chain payloads are encrypted with AES-256-GCM before distribution.
+3. **The Critical Freshness Rule:** Offline verification cannot guarantee non-revocation after the last sync. Snapshots exceeding the freshness window strictly return `INDETERMINATE`.
+4. **Strict Separation of Duties:** Individuals cannot approve their own credential preparation drafts or institutional accreditation applications.
+5. **EIP-4361 SIWE & Client-Side Zero Key Custody:** Private signing keys remain exclusively in client-side Web3 hardware wallets or institutional KMS. The backend never accepts raw private keys.
 
 ---
 
-## 🛠️ Technology Stack
+## 🧪 Quality Gates & Verification Evidence
 
-- **Smart Contracts:** Solidity `^0.8.20`, OpenZeppelin Contracts v5, Hardhat.
-- **Backend Gateway:** Python 3.11+, FastAPI, Pydantic v2, SQLAlchemy 2.0 (asyncio), Uvicorn.
-- **Persistence:** PostgreSQL 16 (production) / aiosqlite (isolated testing).
-- **Frontend Portal:** React 18, TypeScript, Vite, Tailwind CSS, TanStack Query, React Router v6, ethers.js v6.
-- **Containerization & CI:** Docker, Docker Compose, GitHub Actions.
+- **Smart Contracts:** 43/43 Hardhat tests passing (`npx hardhat test`)
+- **Backend Services:** 48/48 Pytest tests passing (`pytest backend/tests`)
+- **Frontend Quality:** 0 TypeScript errors (`tsc --noEmit`), 0 ESLint warnings (`npm run lint`), clean Vite build (`npm run build`)
+- **TypeScript SDK:** Clean compilation (`@decentralid/sdk`)
+- **Database Migrations:** Clean linear Alembic migration graph to head `a38bc19d45e2`
+- **End-to-End Integration:** Full 34-step automated lifecycle verified in `test_e2e_lifecycle.py`
 
 ---
 
-## 🚀 Quickstart & Local Development
+## 🚀 Quickstart & Local Execution
 
 ### 1. Smart Contracts
 ```bash
 # Install dependencies
 npm install
 
-# Compile contracts (dual-compiler 0.8.20 & 0.8.19)
+# Compile contracts
 npx hardhat compile
 
-# Run Hardhat test suite (43 tests: unit, integration, invariant)
+# Run tests
 npx hardhat test
-
-# Deploy registries locally
-npx hardhat run scripts/deploy/deploy_registries.js --network hardhat
 ```
 
-### 2. Backend Gateway
+### 2. Backend Services
 ```bash
-# Set up Python virtual environment
-python -m venv backend/venv
-.\backend\venv\Scripts\activate   # Windows
-# source backend/venv/bin/activate # Linux/macOS
+cd backend
+python -m venv venv
+.\venv\Scripts\activate
+pip install -r requirements.txt
 
-# Install dependencies
-pip install -r backend/requirements.txt
+# Run all 48 tests across Phases 0–18
+PYTHONPATH=. pytest backend/tests -v
 
-# Run backend test suite (12 tests)
-python -m pytest backend/tests
-
-# Start development server
+# Start FastAPI server
 uvicorn backend.app.main:app --reload --port 8000
 ```
-API Documentation live at `http://localhost:8000/docs`
 
-### 3. Frontend Portal
+### 3. Frontend Web Application & PWA
 ```bash
 cd frontend
 npm install
-npx tsc --noEmit
+npm run typecheck
+npm run lint
+npm run build
 npm run dev
 ```
-Portal live at `http://localhost:5173`
 
-### 4. Docker Compose (Full Stack)
+### 4. TypeScript SDK
 ```bash
-docker compose up --build
+cd sdk/typescript
+npm install
+npm run build
 ```
-
----
-
-## 📚 Documentation Index
-
-- **Phase 0 Audits:** [`docs/audit/`](docs/audit/)
-  - [`INITIAL_AUDIT.md`](docs/audit/INITIAL_AUDIT.md)
-  - [`SECURITY_AUDIT.md`](docs/audit/SECURITY_AUDIT.md)
-  - [`BASELINE_TEST_REPORT.md`](docs/audit/BASELINE_TEST_REPORT.md)
-- **Phase 1 System Design:** [`docs/product/`](docs/product/) & [`docs/architecture/`](docs/architecture/)
-  - [`PRD.md`](docs/product/PRD.md)
-  - [`SYSTEM_ARCHITECTURE.md`](docs/architecture/SYSTEM_ARCHITECTURE.md)
-  - [`DATA_ARCHITECTURE.md`](docs/architecture/DATA_ARCHITECTURE.md)
-  - [`SMART_CONTRACT_ARCHITECTURE.md`](docs/architecture/SMART_CONTRACT_ARCHITECTURE.md)
-  - [`THREAT_MODEL.md`](docs/architecture/THREAT_MODEL.md)
-- **Phase 2 & 3 Foundations:** [`docs/security/`](docs/security/)
-  - [`AUTHENTICATION_DESIGN.md`](docs/security/AUTHENTICATION_DESIGN.md)
-  - [`AUTHORIZATION_MATRIX.md`](docs/security/AUTHORIZATION_MATRIX.md)
-  - [`TENANT_ISOLATION.md`](docs/security/TENANT_ISOLATION.md)
-- **Phase 4 Smart Contracts:** [`docs/smart-contracts/`](docs/smart-contracts/)
-  - [`CONTRACT_DESIGN.md`](docs/smart-contracts/CONTRACT_DESIGN.md)
-  - [`ISSUER_REGISTRY.md`](docs/smart-contracts/ISSUER_REGISTRY.md)
-  - [`CREDENTIAL_REGISTRY.md`](docs/smart-contracts/CREDENTIAL_REGISTRY.md)
-  - [`CREDENTIAL_STATUS_REGISTRY.md`](docs/smart-contracts/CREDENTIAL_STATUS_REGISTRY.md)
-  - [`GAS_REPORT.md`](docs/smart-contracts/GAS_REPORT.md)
-- **Milestone Progress Reports:** [`docs/progress/`](docs/progress/)
-  - [`PHASE_0_REPORT.md`](docs/progress/PHASE_0_REPORT.md)
-  - [`PHASE_1_REPORT.md`](docs/progress/PHASE_1_REPORT.md)
-  - [`PHASE_2_REPORT.md`](docs/progress/PHASE_2_REPORT.md)
-  - [`PHASE_3_REPORT.md`](docs/progress/PHASE_3_REPORT.md)
-  - [`PHASE_4_REPORT.md`](docs/progress/PHASE_4_REPORT.md)

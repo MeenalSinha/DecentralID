@@ -18,6 +18,10 @@ from backend.app.api.routes.intelligence import router as intelligence_router
 from backend.app.api.routes.developer_api import router as developer_api_router
 from backend.app.api.routes.webhooks import router as webhooks_router
 from backend.app.api.routes.analytics import router as analytics_router
+from backend.app.api.routes.interoperability import router as interoperability_router
+from backend.app.api.routes.governance import router as governance_router
+from backend.app.api.routes.offline import router as offline_router
+from backend.app.api.routes.integrations import router as integrations_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -63,3 +67,7 @@ app.include_router(intelligence_router, prefix=settings.API_V1_STR)
 app.include_router(developer_api_router, prefix=settings.API_V1_STR)
 app.include_router(webhooks_router, prefix=settings.API_V1_STR)
 app.include_router(analytics_router, prefix=settings.API_V1_STR)
+app.include_router(interoperability_router, prefix=settings.API_V1_STR)
+app.include_router(governance_router, prefix=settings.API_V1_STR)
+app.include_router(offline_router, prefix=settings.API_V1_STR)
+app.include_router(integrations_router, prefix=settings.API_V1_STR)
