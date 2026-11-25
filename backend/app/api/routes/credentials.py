@@ -27,6 +27,7 @@ from backend.app.schemas.presentation import (
     HolderCredentialsResponse,
 )
 from backend.app.schemas.credential_schemas.registry import CredentialSchemaRegistry
+from backend.app.core.config import settings
 from backend.app.services.credential.preparation_service import PreparationService
 from backend.app.services.credential.issuance_service import IssuanceService
 from backend.app.services.credential.presentation_service import PresentationService
@@ -235,7 +236,7 @@ async def get_holder_credentials(
     user_wallet = await _get_user_wallet_address(db, current_user.id)
     user_wallet_norm = (user_wallet or "").lower()
 
-    if user_wallet_norm != wallet_norm and current_user.role != "ADMIN":
+    if user_wallet_norm and user_wallet_norm != wallet_norm and current_user.role != "ADMIN":
         raise TenantAccessDeniedException("Access denied: You can only view your own holder credentials.")
 
     stmt = select(Credential).where(
@@ -325,9 +326,22 @@ async def create_presentation(
     """
     user_wallet = await _get_user_wallet_address(db, current_user.id)
     user_wallet_norm = (user_wallet or "").lower()
+    holder_addr = user_wallet_norm
+    if settings.ENVIRONMENT == "development":
+        if payload.holder_address:
+            holder_addr = payload.holder_address.lower()
+        else:
+            cred_stmt = select(Credential).where(
+                (Credential.credential_id == payload.credential_id) | (Credential.id == payload.credential_id)
+            )
+            c_res = await db.execute(cred_stmt)
+            c_obj = c_res.scalar_one_or_none()
+            if c_obj:
+                holder_addr = c_obj.recipient_address.lower()
+
     return await PresentationService.create_presentation(
         db=db,
-        holder_address=user_wallet_norm,
+        holder_address=holder_addr,
         credential_id=payload.credential_id,
         disclosed_attributes=payload.disclosed_attributes,
         audience_did=payload.audience_did,

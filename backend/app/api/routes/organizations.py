@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict, Any
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -21,6 +21,27 @@ from backend.app.models.credential import Credential
 from backend.app.services.authorization_service import AuthorizationService
 
 router = APIRouter(prefix="/organizations", tags=["Organizations & Tenant Management"])
+
+@router.get("", response_model=Dict[str, Any], status_code=status.HTTP_200_OK)
+async def list_organizations(
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    stmt = select(Organization)
+    res = await db.execute(stmt)
+    orgs = res.scalars().all()
+    items = [
+        OrganizationResponse(
+            id=o.id,
+            name=o.name,
+            legal_entity_id=o.legal_entity_id,
+            domain=o.domain,
+            status=o.status,
+            on_chain_address=o.on_chain_address,
+            created_at=o.created_at.isoformat() if o.created_at else "",
+        )
+        for o in orgs
+    ]
+    return {"total": len(items), "items": items}
 
 @router.post("", response_model=OrganizationResponse, status_code=status.HTTP_201_CREATED)
 async def register_organization(

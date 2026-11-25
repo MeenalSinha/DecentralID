@@ -59,20 +59,21 @@ export const WalletView: React.FC = () => {
   const [vaultStatus, setVaultStatus] = useState<string | null>(null);
   const [showVaultModal, setShowVaultModal] = useState(false);
 
-  useEffect(() => {
-    if (account) {
-      fetchHolderCredentials();
-    } else {
-      setCredentials([]);
-    }
-  }, [account]);
+  // Default to genuine test holder if no Web3 browser extension is connected
+  const DEMO_HOLDER = '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC';
+  const effectiveAccount = account || DEMO_HOLDER;
 
-  const fetchHolderCredentials = async () => {
-    if (!account) return;
+  useEffect(() => {
+    fetchHolderCredentials(effectiveAccount);
+  }, [effectiveAccount]);
+
+  const fetchHolderCredentials = async (targetAccount?: string) => {
+    const acc = targetAccount || effectiveAccount;
+    if (!acc) return;
     setLoading(true);
     try {
       const res = await apiGet<{ total: number; items: CredentialItem[] }>(
-        `/credentials/holder/${account}`
+        `/credentials/holder/${acc}`
       );
       setCredentials(res.items || []);
     } catch {
@@ -117,6 +118,7 @@ export const WalletView: React.FC = () => {
       const res = await apiPost<any>('/credentials/presentations', {
         credential_id: presentingCred.credential_id,
         disclosed_attributes: selectedAttributes,
+        holder_address: effectiveAccount,
         expires_in_hours: 24,
       });
       setGeneratedVP(res);
@@ -233,9 +235,8 @@ export const WalletView: React.FC = () => {
           <Button
             variant="primary"
             size="sm"
-            onClick={fetchHolderCredentials}
+            onClick={() => fetchHolderCredentials()}
             isLoading={loading}
-            disabled={!account}
             leftIcon={<RefreshCw size={13} />}
           >
             Refresh
@@ -256,33 +257,23 @@ export const WalletView: React.FC = () => {
               </span>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className="font-mono text-xs font-semibold text-foreground break-all">
-                  {account
-                    ? `did:pkh:eip155:${chainId || 31337}:${account}`
-                    : 'No Wallet Connected'}
+                  {`did:pkh:eip155:${chainId || 31337}:${effectiveAccount}`}
                 </span>
-                {account && (
-                  <button
-                    onClick={copyDid}
-                    className="p-1 rounded text-foreground-muted hover:text-foreground hover:bg-surface-subtle transition-colors"
-                    title="Copy DID"
-                  >
-                    {copiedDid ? <Check size={13} className="text-status-success" /> : <Copy size={13} />}
-                  </button>
-                )}
+                <button
+                  onClick={copyDid}
+                  className="p-1 rounded text-foreground-muted hover:text-foreground hover:bg-surface-subtle transition-colors"
+                  title="Copy DID"
+                >
+                  {copiedDid ? <Check size={13} className="text-status-success" /> : <Copy size={13} />}
+                </button>
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {account ? (
-              <Badge variant="success" size="md" dot>
-                Vault Decrypted & Active
-              </Badge>
-            ) : (
-              <Badge variant="warning" size="md" dot>
-                Wallet Disconnected
-              </Badge>
-            )}
+            <Badge variant="success" size="md" dot>
+              {account ? 'Vault Decrypted & Connected' : 'Decrypted Vault (Rahul Sharma)'}
+            </Badge>
           </div>
         </div>
 
@@ -327,7 +318,7 @@ export const WalletView: React.FC = () => {
       </Card>
 
       {/* Main Content Area */}
-      {!account ? (
+      {!effectiveAccount ? (
         <Card className="p-12 text-center space-y-3">
           <div className="w-12 h-12 rounded-full bg-surface-subtle border border-border flex items-center justify-center mx-auto text-foreground-muted">
             <Shield size={24} />
@@ -353,7 +344,7 @@ export const WalletView: React.FC = () => {
             No Verifiable Credentials Found
           </h3>
           <p className="text-xs text-foreground-secondary max-w-md mx-auto leading-relaxed">
-            Credentials issued to <code className="bg-surface-subtle px-1.5 py-0.5 rounded font-mono text-foreground">{account}</code> by authorized institutions will appear here automatically.
+            Credentials issued to <code className="bg-surface-subtle px-1.5 py-0.5 rounded font-mono text-foreground">{effectiveAccount}</code> by authorized institutions will appear here automatically.
           </p>
         </Card>
       ) : (

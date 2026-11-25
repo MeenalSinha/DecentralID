@@ -16,6 +16,7 @@ import { Button } from '../../../components/ui/Button';
 import { Badge } from '../../../components/ui/Badge';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
+import { fetchApi } from '../../../app/config/api';
 
 interface ExtractedField {
   value: any;
@@ -74,21 +75,38 @@ export const IntelligenceView: React.FC = () => {
 
   useEffect(() => {
     loadOrganizations();
+    loadExistingDemoExtraction();
   }, [account]);
 
   const loadOrganizations = async () => {
     try {
-      const res = await fetch('/api/v1/organizations', { credentials: 'include' });
-      if (res.ok) {
-        const data = await res.json();
-        const items = data.items || (Array.isArray(data) ? data : []);
-        setOrganizations(items);
-        if (items.length > 0 && !selectedOrgId) {
-          setSelectedOrgId(items[0].id);
-        }
+      const data = await fetchApi<any>('/organizations');
+      const items = data.items || (Array.isArray(data) ? data : []);
+      setOrganizations(items);
+      if (items.length > 0 && !selectedOrgId) {
+        setSelectedOrgId(items[0].id);
       }
     } catch (err: any) {
       console.error('Failed to load organizations:', err);
+    }
+  };
+
+  const loadExistingDemoExtraction = async () => {
+    try {
+      const data = await fetchApi<DocumentExtraction>('/intelligence/documents/00000000-0000-0000-0000-000000000301');
+      if (data) {
+        setExtraction(data);
+        const initialEdits: Record<string, string> = {};
+        if (data.extracted_fields) {
+          Object.entries(data.extracted_fields).forEach(([k, v]: [string, any]) => {
+            initialEdits[k] = String(v.value);
+          });
+        }
+        setEditingFields(initialEdits);
+        setRecipientAddress('0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC');
+      }
+    } catch (err: any) {
+      console.error('No existing demo extraction:', err);
     }
   };
 

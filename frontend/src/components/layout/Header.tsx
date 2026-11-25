@@ -34,6 +34,10 @@ export const Header: React.FC<HeaderProps> = ({
 
   const routeTitles: Record<string, { title: string; subtitle: string }> = {
     '/': {
+      title: 'Platform Overview',
+      subtitle: 'Decentralized Trust Infrastructure & Working Architecture',
+    },
+    '/verify': {
       title: 'Credential Verification',
       subtitle: 'Cryptographic & On-Chain Integrity Validation',
     },
@@ -48,6 +52,18 @@ export const Header: React.FC<HeaderProps> = ({
     '/intelligence': {
       title: 'Document Intelligence',
       subtitle: 'OCR Extraction, Verification & Anomaly Detection',
+    },
+    '/lifecycle': {
+      title: 'Credential Lifecycle',
+      subtitle: 'W3C Bitstring Status Lists & Revocation State Machine',
+    },
+    '/developer': {
+      title: 'Developer Network',
+      subtitle: 'API Keys, HMAC-SHA256 Webhooks & TypeScript SDK',
+    },
+    '/operations': {
+      title: 'Platform Operations',
+      subtitle: 'Enterprise Reliability, Health Probes & System Telemetry',
     },
   };
 

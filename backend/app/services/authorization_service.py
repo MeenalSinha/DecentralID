@@ -43,7 +43,18 @@ class AuthorizationService:
         normalized_roles = set(required_roles)
         if "ADMIN" in normalized_roles:
             normalized_roles.add(UserRole.INSTITUTION_ADMIN.value)
-        return membership.role in normalized_roles
+        return membership
+
+    @staticmethod
+    async def get_user_organizations(db: AsyncSession, user_id: str) -> list[dict]:
+        """Return all active organization memberships for a user."""
+        stmt = select(OrganizationMembership).where(
+            OrganizationMembership.user_id == user_id,
+            OrganizationMembership.status == MembershipStatus.ACTIVE.value,
+        )
+        res = await db.execute(stmt)
+        memberships = res.scalars().all()
+        return [{"organization_id": m.organization_id, "role": m.role} for m in memberships].role in normalized_roles
 
     @staticmethod
     async def verify_tenant_access(
@@ -89,3 +100,14 @@ class AuthorizationService:
             )
 
         return membership
+
+    @staticmethod
+    async def get_user_organizations(db: AsyncSession, user_id: str) -> list[dict]:
+        """Return all active organization memberships for a user."""
+        stmt = select(OrganizationMembership).where(
+            OrganizationMembership.user_id == user_id,
+            OrganizationMembership.status == MembershipStatus.ACTIVE.value,
+        )
+        res = await db.execute(stmt)
+        memberships = res.scalars().all()
+        return [{"organization_id": m.organization_id, "role": m.role} for m in memberships]

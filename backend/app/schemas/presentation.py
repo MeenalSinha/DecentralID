@@ -13,6 +13,10 @@ class CreatePresentationRequest(BaseModel):
         description="Optional recipient verifier DID, e.g. did:pkh:eip155:1337:0x..."
     )
     expires_in_hours: int = Field(default=24, ge=1, le=168, description="Presentation link validity window")
+    holder_address: Optional[str] = Field(
+        default=None,
+        description="Holder wallet address for development/testing"
+    )
     holder_signature: Optional[str] = Field(
         default=None,
         description="Optional holder signature over presentation challenge if client-side signing enabled"

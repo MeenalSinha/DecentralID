@@ -10,6 +10,9 @@ import {
   Shield,
   ExternalLink,
   Cpu,
+  LayoutDashboard,
+  RefreshCw,
+  Code2,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -30,17 +33,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navItems = [
     {
       to: '/',
-      label: 'Verify Credential',
-      shortLabel: 'Verify',
-      description: 'Independent validation',
-      icon: ShieldCheck,
-    },
-    {
-      to: '/wallet',
-      label: 'My Wallet',
-      shortLabel: 'Wallet',
-      description: 'Credentials & encrypted vault',
-      icon: Wallet,
+      label: 'Platform Overview',
+      shortLabel: 'Overview',
+      description: 'Platform metrics & architecture',
+      icon: LayoutDashboard,
     },
     {
       to: '/issuer',
@@ -55,6 +51,41 @@ export const Sidebar: React.FC<SidebarProps> = ({
       shortLabel: 'Intelligence',
       description: 'AI extraction & verification',
       icon: Sparkles,
+    },
+    {
+      to: '/wallet',
+      label: 'Holder Wallet',
+      shortLabel: 'Wallet',
+      description: 'Credentials & encrypted vault',
+      icon: Wallet,
+    },
+    {
+      to: '/verify',
+      label: 'Verify Credential',
+      shortLabel: 'Verify',
+      description: 'Independent validation',
+      icon: ShieldCheck,
+    },
+    {
+      to: '/lifecycle',
+      label: 'Credential Lifecycle',
+      shortLabel: 'Lifecycle',
+      description: 'Bitstring status & revocation',
+      icon: RefreshCw,
+    },
+    {
+      to: '/developer',
+      label: 'Developer Network',
+      shortLabel: 'Developers',
+      description: 'APIs, webhooks & SDK',
+      icon: Code2,
+    },
+    {
+      to: '/operations',
+      label: 'Platform Operations',
+      shortLabel: 'Operations',
+      description: 'SRE & system telemetry',
+      icon: Cpu,
     },
   ];
 
