@@ -29,6 +29,25 @@
   }
 }
 
+@layer utilities {
+  .bg-primary {
+    background-color: #245C52;
+  }
+  .bg-primary-hover:hover,
+  .hover\:bg-primary-hover:hover {
+    background-color: #19483F;
+  }
+  .bg-primary-soft {
+    background-color: #EAF2EF;
+  }
+  .text-primary {
+    color: #245C52;
+  }
+  .border-primary {
+    border-color: #245C52;
+  }
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
