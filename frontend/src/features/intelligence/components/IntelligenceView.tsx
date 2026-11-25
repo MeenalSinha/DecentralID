@@ -6,11 +6,16 @@ import {
   XCircle,
   ArrowRight,
   ShieldAlert,
-  RefreshCw,
   Sparkles,
   Lock,
+  FileCheck,
 } from 'lucide-react';
 import { useWallet } from '../../authentication/hooks/useWallet';
+import { Card } from '../../../components/ui/Card';
+import { Button } from '../../../components/ui/Button';
+import { Badge } from '../../../components/ui/Badge';
+import { Input } from '../../../components/ui/Input';
+import { Select } from '../../../components/ui/Select';
 
 interface ExtractedField {
   value: any;
@@ -194,189 +199,220 @@ export const IntelligenceView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8">
-      {/* Header Banner */}
-      <div className="bg-gradient-to-r from-indigo-900 to-blue-900 text-white rounded-2xl p-8 shadow-xl border border-indigo-800">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-500/30 text-indigo-200 rounded-full text-xs font-semibold tracking-wide border border-indigo-400/30">
-              <Sparkles size={14} />
-              <span>DecentralID Intelligence Engine</span>
-            </div>
-            <h1 className="text-3xl font-bold tracking-tight">AI Document Extraction & Anomaly Detection</h1>
-            <p className="text-indigo-200 text-sm max-w-2xl">
-              Upload institutional credentials (PDF/Images) to automatically extract claims, cross-reference schemas,
-              flag suspicious anomalies, and convert verified records into the standard issuance pipeline.
-            </p>
+    <div className="max-w-6xl mx-auto space-y-6 pb-12">
+      {/* Editorial Page Header */}
+      <div className="border-b border-border pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-primary font-semibold text-xs tracking-wider uppercase mb-1">
+            <Sparkles size={15} />
+            <span>Document Intelligence Workspace</span>
           </div>
-          <div className="flex items-center gap-3 bg-white/10 backdrop-blur-sm p-4 rounded-xl border border-white/10 text-xs">
-            <Lock className="text-indigo-300" size={24} />
-            <div>
-              <div className="font-semibold text-white">Non-Bypass Governance</div>
-              <div className="text-indigo-200">AI never signs or issues directly. Human review required.</div>
-            </div>
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">
+            OCR Extraction & Anomaly Detection
+          </h1>
+          <p className="text-sm text-foreground-secondary mt-1 max-w-xl leading-relaxed">
+            Ingest certificates, transcripts, and official documentation with automated field extraction, schema alignment, and cross-record integrity checks.
+          </p>
+        </div>
+
+        {/* Governance Rule Badge */}
+        <div className="p-3 bg-surface-subtle rounded-control border border-border-subtle flex items-center gap-3 text-xs shrink-0 max-w-xs">
+          <Lock className="text-primary shrink-0" size={18} />
+          <div>
+            <span className="font-semibold text-foreground block">Separation of Duties</span>
+            <span className="text-[11px] text-foreground-secondary">
+              AI assists extraction. Human review & cryptographic signing required.
+            </span>
           </div>
         </div>
       </div>
 
       {/* Global Alerts */}
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3 text-red-800 text-sm">
-          <XCircle className="w-5 h-5 flex-shrink-0 text-red-600 mt-0.5" />
+        <div className="p-3.5 rounded-control bg-status-danger-soft border border-status-danger/30 flex items-start gap-2.5 text-xs text-status-danger">
+          <XCircle className="w-4 h-4 shrink-0 mt-0.5" />
           <div>
-            <div className="font-semibold">Operation Error</div>
-            <div>{error}</div>
+            <span className="font-semibold block">Operation Error</span>
+            <span>{error}</span>
           </div>
         </div>
       )}
 
       {successMsg && (
-        <div className="p-4 bg-green-50 border border-green-200 rounded-xl flex items-start gap-3 text-green-800 text-sm">
-          <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-green-600 mt-0.5" />
+        <div className="p-3.5 rounded-control bg-status-success-soft border border-status-success/30 flex items-start gap-2.5 text-xs text-status-success">
+          <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
           <div>
-            <div className="font-semibold">Success</div>
-            <div>{successMsg}</div>
+            <span className="font-semibold block">Operation Completed</span>
+            <span>{successMsg}</span>
           </div>
         </div>
       )}
 
       {/* Document Intake Card */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
-        <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-          <Upload className="text-indigo-600" size={20} />
-          <span>Upload Credential for Ingestion & Analysis</span>
-        </h2>
+      <Card className="space-y-4">
+        <div className="border-b border-border pb-3">
+          <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+            <Upload size={16} className="text-primary" />
+            Document Intake & Ingestion
+          </h2>
+          <p className="text-xs text-foreground-secondary mt-0.5">
+            Select the issuing organization tenant and upload a digital credential document for automated processing.
+          </p>
+        </div>
 
         <form onSubmit={handleFileUpload} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
-                Issuing Organization Tenant
-              </label>
-              <select
-                value={selectedOrgId}
-                onChange={(e) => setSelectedOrgId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                {organizations.map((org) => (
-                  <option key={org.id} value={org.id}>
-                    {org.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Select
+              label="Issuing Organization Tenant"
+              value={selectedOrgId}
+              onChange={(e) => setSelectedOrgId(e.target.value)}
+            >
+              {organizations.map((org) => (
+                <option key={org.id} value={org.id}>
+                  {org.name}
+                </option>
+              ))}
+            </Select>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
+              <label className="block text-xs font-semibold text-foreground mb-1.5">
                 Document File (PDF, PNG, JPG)
               </label>
               <input
                 type="file"
                 accept=".pdf,.png,.jpg,.jpeg,.txt"
                 onChange={(e) => setFile(e.target.files?.[0] || null)}
-                className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                className="w-full text-xs text-foreground-secondary file:mr-3 file:py-1.5 file:px-3 file:rounded-control file:border-0 file:text-xs file:font-semibold file:bg-primary-soft file:text-primary hover:file:bg-primary-soft/80 cursor-pointer border border-border rounded-control p-1 bg-surface shadow-subtle"
               />
             </div>
           </div>
 
-          <div className="flex justify-end pt-2">
-            <button
+          <div className="flex justify-end pt-2 border-t border-border">
+            <Button
               type="submit"
-              disabled={uploading || !file || !selectedOrgId}
-              className="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-sm"
+              variant="primary"
+              size="md"
+              isLoading={uploading}
+              disabled={!file || !selectedOrgId}
+              leftIcon={<Brain size={15} />}
             >
-              {uploading ? (
-                <>
-                  <RefreshCw className="animate-spin" size={16} />
-                  <span>Processing Document...</span>
-                </>
-              ) : (
-                <>
-                  <Brain size={16} />
-                  <span>Run Document Extraction</span>
-                </>
-              )}
-            </button>
+              Run Document Extraction
+            </Button>
           </div>
         </form>
-      </div>
+      </Card>
 
       {/* Extraction & Anomaly Report */}
       {extraction && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-200">
           {/* Left Column: Extraction Overview & Anomaly Findings */}
-          <div className="lg:col-span-1 space-y-6">
-            {/* Status Card */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase text-gray-500">Extraction Confidence</span>
-                <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                  extraction.overall_confidence >= 0.8
-                    ? 'bg-green-100 text-green-800'
-                    : extraction.overall_confidence >= 0.6
-                    ? 'bg-yellow-100 text-yellow-800'
-                    : 'bg-red-100 text-red-800'
-                }`}>
-                  {Math.round(extraction.overall_confidence * 100)}%
+          <div className="lg:col-span-1 space-y-4">
+            {/* Confidence & Schema Card */}
+            <Card className="space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-border">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted">
+                  Extraction Confidence
+                </span>
+                <Badge
+                  variant={
+                    extraction.overall_confidence >= 0.8
+                      ? 'success'
+                      : extraction.overall_confidence >= 0.6
+                      ? 'warning'
+                      : 'danger'
+                  }
+                  size="sm"
+                >
+                  {Math.round(extraction.overall_confidence * 100)}% Confidence
+                </Badge>
+              </div>
+
+              <div>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted block">
+                  Matched Credential Schema
+                </span>
+                <span className="text-xs font-semibold text-foreground mt-0.5 block truncate">
+                  {extraction.schema_type}
                 </span>
               </div>
 
               <div>
-                <div className="text-xs text-gray-500">Matched Schema</div>
-                <div className="font-semibold text-gray-900 text-sm">{extraction.schema_type}</div>
-              </div>
-
-              <div>
-                <div className="text-xs text-gray-500">Review Status</div>
-                <span className={`inline-block mt-1 px-2.5 py-0.5 rounded text-xs font-semibold ${
-                  extraction.review_status === 'APPROVED'
-                    ? 'bg-green-100 text-green-800'
-                    : extraction.review_status === 'REJECTED'
-                    ? 'bg-red-100 text-red-800'
-                    : 'bg-amber-100 text-amber-800'
-                }`}>
-                  {extraction.review_status}
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted block">
+                  Human Review Status
                 </span>
+                <div className="mt-1">
+                  <Badge
+                    variant={
+                      extraction.review_status === 'APPROVED'
+                        ? 'success'
+                        : extraction.review_status === 'REJECTED'
+                        ? 'danger'
+                        : 'warning'
+                    }
+                    size="md"
+                    dot
+                  >
+                    {extraction.review_status}
+                  </Badge>
+                </div>
               </div>
-            </div>
+            </Card>
 
-            {/* Anomaly Detection Findings */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-4">
-              <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
-                <ShieldAlert size={18} className={extraction.anomaly_findings.length > 0 ? 'text-amber-500' : 'text-green-500'} />
-                <span>Anomaly & Integrity Audit</span>
-                <span className="ml-auto text-xs px-2 py-0.5 bg-gray-100 rounded-full font-mono text-gray-600">
-                  {extraction.anomaly_findings.length}
+            {/* Anomaly Detection Findings Card */}
+            <Card className="space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-border">
+                <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <ShieldAlert
+                    size={15}
+                    className={
+                      extraction.anomaly_findings.length > 0
+                        ? 'text-status-warning'
+                        : 'text-status-success'
+                    }
+                  />
+                  Anomaly & Integrity Audit
                 </span>
-              </h3>
+                <Badge variant="neutral" size="sm">
+                  {extraction.anomaly_findings.length} Findings
+                </Badge>
+              </div>
 
               {extraction.anomaly_findings.length === 0 ? (
-                <div className="p-3 bg-green-50 text-green-800 rounded-xl text-xs flex items-center gap-2">
-                  <CheckCircle2 size={16} />
+                <div className="p-3 bg-status-success-soft text-status-success rounded-control text-xs flex items-center gap-2 border border-status-success/20">
+                  <CheckCircle2 size={15} className="shrink-0" />
                   <span>No suspicious inconsistencies or collisions detected.</span>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {extraction.anomaly_findings.map((finding, idx) => (
                     <div
                       key={idx}
-                      className={`p-3 rounded-xl border text-xs space-y-1 ${
+                      className={`p-3 rounded-control border text-xs space-y-1 ${
                         finding.severity === 'CRITICAL'
-                          ? 'bg-red-50 border-red-200 text-red-900'
+                          ? 'bg-status-danger-soft border-status-danger/30 text-status-danger'
                           : finding.severity === 'HIGH'
-                          ? 'bg-orange-50 border-orange-200 text-orange-900'
-                          : 'bg-yellow-50 border-yellow-200 text-yellow-900'
+                          ? 'bg-status-warning-soft border-status-warning/30 text-status-warning'
+                          : 'bg-surface-subtle border-border text-foreground'
                       }`}
                     >
-                      <div className="flex items-center justify-between font-bold">
+                      <div className="flex items-center justify-between font-semibold">
                         <span>{finding.rule}</span>
-                        <span className="text-[10px] px-1.5 py-0.5 bg-white/70 rounded">
+                        <Badge
+                          variant={
+                            finding.severity === 'CRITICAL'
+                              ? 'danger'
+                              : finding.severity === 'HIGH'
+                              ? 'warning'
+                              : 'neutral'
+                          }
+                          size="sm"
+                        >
                           {finding.severity}
-                        </span>
+                        </Badge>
                       </div>
-                      <div>{finding.description}</div>
+                      <p className="text-[11px] opacity-90">{finding.description}</p>
                       {finding.evidence && (
-                        <div className="font-mono text-[11px] opacity-80 pt-1">
+                        <div className="font-mono text-[10px] text-foreground-muted pt-0.5 truncate">
                           Evidence: {finding.evidence}
                         </div>
                       )}
@@ -384,110 +420,131 @@ export const IntelligenceView: React.FC = () => {
                   ))}
                 </div>
               )}
-            </div>
+            </Card>
           </div>
 
           {/* Right Column: Field-Level Review & Pipeline Submission */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-6">
-              <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+          <div className="lg:col-span-2 space-y-4">
+            <Card className="space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border">
                 <div>
-                  <h3 className="font-bold text-gray-900">Extracted Credential Claims</h3>
-                  <p className="text-xs text-gray-500">
-                    Verify and correct field values before submitting to the approval workflow.
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Extracted Credential Claims
+                  </h3>
+                  <p className="text-xs text-foreground-secondary mt-0.5">
+                    Inspect and correct field values before submitting to the approval pipeline.
                   </p>
                 </div>
                 <div className="flex gap-2">
-                  <button
+                  <Button
+                    variant="primary"
+                    size="sm"
                     onClick={() => handleReviewAction('APPROVE')}
-                    className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700"
+                    leftIcon={<FileCheck size={13} />}
                   >
                     Approve Extraction
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
                     onClick={() => handleReviewAction('REJECT')}
-                    className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700"
+                    leftIcon={<XCircle size={13} />}
                   >
                     Reject
-                  </button>
+                  </Button>
                 </div>
               </div>
 
-              {/* Field Form */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Editable Fields Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {Object.entries(extraction.extracted_fields).map(([fieldName, fieldData]) => (
-                  <div key={fieldName} className="space-y-1.5 p-3 bg-gray-50 rounded-xl border border-gray-200">
-                    <div className="flex items-center justify-between text-xs font-semibold text-gray-700">
-                      <span>{fieldName}</span>
-                      <span className="text-[10px] text-gray-500 font-mono">
+                  <div
+                    key={fieldName}
+                    className="p-3 bg-surface-subtle rounded-control border border-border-subtle space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between text-xs font-semibold text-foreground">
+                      <span className="capitalize">{fieldName.replace(/([A-Z])/g, ' $1')}</span>
+                      <span className="text-[10px] font-mono text-foreground-muted">
                         {Math.round(fieldData.confidence * 100)}% conf
                       </span>
                     </div>
-                    <input
+                    <Input
                       type="text"
                       value={editingFields[fieldName] ?? ''}
                       onChange={(e) =>
                         setEditingFields({ ...editingFields, [fieldName]: e.target.value })
                       }
-                      className="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="bg-surface"
                     />
                     {fieldData.evidence_snippet && (
-                      <div className="text-[11px] text-gray-500 truncate" title={fieldData.evidence_snippet}>
-                        Source: "{fieldData.evidence_snippet}"
-                      </div>
+                      <p
+                        className="text-[10px] text-foreground-muted truncate"
+                        title={fieldData.evidence_snippet}
+                      >
+                        Evidence: "{fieldData.evidence_snippet}"
+                      </p>
                     )}
                   </div>
                 ))}
               </div>
 
               {/* Credential Preparation Gateway */}
-              <div className="border-t border-gray-100 pt-6 space-y-4">
-                <h4 className="font-bold text-gray-900 text-sm flex items-center gap-2">
-                  <ArrowRight size={16} className="text-indigo-600" />
+              <div className="border-t border-border pt-4 space-y-3">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-foreground-secondary flex items-center gap-1.5">
+                  <ArrowRight size={14} className="text-primary" />
                   <span>Prepare Verifiable Credential from Extraction</span>
                 </h4>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-                  <div className="md:col-span-2">
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      Recipient Holder Wallet Address (0x...)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="0x..."
-                      value={recipientAddress}
-                      onChange={(e) => setRecipientAddress(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
+                <div className="flex flex-col sm:flex-row gap-3 items-end">
+                  <Input
+                    label="Recipient Holder Wallet Address"
+                    type="text"
+                    placeholder="0x... (holder wallet address)"
+                    value={recipientAddress}
+                    onChange={(e) => setRecipientAddress(e.target.value)}
+                    className="font-mono text-xs flex-1"
+                  />
 
-                  <div>
-                    <button
-                      onClick={handlePrepareCredential}
-                      disabled={preparing || extraction.review_status !== 'APPROVED' || !recipientAddress}
-                      className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-sm"
-                    >
-                      {preparing ? 'Preparing...' : 'Prepare Credential'}
-                    </button>
-                  </div>
+                  <Button
+                    variant="primary"
+                    size="md"
+                    onClick={handlePrepareCredential}
+                    isLoading={preparing}
+                    disabled={extraction.review_status !== 'APPROVED' || !recipientAddress}
+                    className="shrink-0"
+                  >
+                    Prepare Draft
+                  </Button>
                 </div>
 
                 {extraction.review_status !== 'APPROVED' && (
-                  <p className="text-xs text-amber-700 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+                  <div className="p-3 rounded-control bg-status-warning-soft border border-status-warning/20 text-xs text-status-warning">
                     Extraction must be approved by authorized staff before submitting into the credential pipeline.
-                  </p>
+                  </div>
                 )}
 
                 {preparedSummary && (
-                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-2 text-xs text-blue-900">
-                    <div className="font-bold text-sm">Credential Draft Prepared!</div>
-                    <div>W3C ID: <span className="font-mono">{preparedSummary.w3c_id}</span></div>
-                    <div>Commitment: <span className="font-mono">{preparedSummary.commitment}</span></div>
-                    <div className="pt-1 text-gray-600">{preparedSummary.notice}</div>
+                  <div className="p-4 bg-status-success-soft border border-status-success/30 rounded-control space-y-1.5 text-xs text-status-success">
+                    <span className="font-semibold text-foreground block">
+                      Credential Draft Prepared Successfully
+                    </span>
+                    <div>
+                      <span className="text-foreground-muted">W3C ID: </span>
+                      <span className="font-mono">{preparedSummary.w3c_id}</span>
+                    </div>
+                    <div>
+                      <span className="text-foreground-muted">Commitment: </span>
+                      <span className="font-mono">{preparedSummary.commitment}</span>
+                    </div>
+                    {preparedSummary.notice && (
+                      <p className="text-[11px] text-foreground-secondary pt-1">
+                        {preparedSummary.notice}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
-            </div>
+            </Card>
           </div>
         </div>
       )}

@@ -12,12 +12,15 @@ import {
   Eye,
   Download,
   RefreshCw,
-  Sliders,
   Check,
-  X
 } from 'lucide-react';
 import { useWallet } from '../../authentication/hooks/useWallet';
 import { apiGet, apiPost } from '../../../app/config/api';
+import { Card } from '../../../components/ui/Card';
+import { Button } from '../../../components/ui/Button';
+import { Badge } from '../../../components/ui/Badge';
+import { Input } from '../../../components/ui/Input';
+import { Modal } from '../../../components/ui/Modal';
 
 interface CredentialItem {
   id: string;
@@ -48,6 +51,7 @@ export const WalletView: React.FC = () => {
   const [disclosedKeys, setDisclosedKeys] = useState<Record<string, boolean>>({});
   const [generatedVP, setGeneratedVP] = useState<any | null>(null);
   const [copiedToken, setCopiedToken] = useState(false);
+  const [copiedDid, setCopiedDid] = useState(false);
   const [verificationResults, setVerificationResults] = useState<Record<string, boolean>>({});
 
   // Encrypted Vault (Web Crypto AES-GCM)
@@ -189,172 +193,238 @@ export const WalletView: React.FC = () => {
     setTimeout(() => setCopiedToken(false), 2000);
   };
 
+  const copyDid = () => {
+    if (!account) return;
+    const did = `did:pkh:eip155:${chainId || 31337}:${account}`;
+    navigator.clipboard.writeText(did);
+    setCopiedDid(true);
+    setTimeout(() => setCopiedDid(false), 2000);
+  };
+
+  const activeCount = credentials.filter((c) => c.status === 'ACTIVE').length;
+  const revokedCount = credentials.filter((c) => c.status === 'REVOKED' || c.status === 'SUSPENDED').length;
+
   return (
-    <div className="max-w-6xl mx-auto space-y-8 pb-16">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="max-w-5xl mx-auto space-y-6 pb-12">
+      {/* Editorial Header */}
+      <div className="border-b border-border pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">
-            DecentralID Personal Credential Vault
+          <div className="flex items-center gap-2 text-primary font-semibold text-xs tracking-wider uppercase mb-1">
+            <Wallet size={15} />
+            <span>Self-Sovereign Identity</span>
+          </div>
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">
+            Holder Wallet & Vault
           </h1>
-          <p className="text-gray-600 text-sm mt-1">
-            Privacy-preserving self-sovereign wallet. Hold cryptographically verified credentials, create selective disclosure presentations, and export encrypted vaults.
+          <p className="text-sm text-foreground-secondary mt-1 max-w-xl leading-relaxed">
+            Manage your portable verifiable credentials, create selective disclosure presentations, and export encrypted client-side backups.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button
+
+        <div className="flex items-center gap-2.5 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => setShowVaultModal(true)}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition"
+            leftIcon={<Lock size={13} />}
           >
-            <Lock size={16} />
             Encrypted Backup
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
             onClick={fetchHolderCredentials}
-            disabled={loading || !account}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition"
+            isLoading={loading}
+            disabled={!account}
+            leftIcon={<RefreshCw size={13} />}
           >
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
             Refresh
-          </button>
+          </Button>
         </div>
       </div>
 
-      {/* Account / DID Card */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-6 text-white shadow-lg space-y-4">
-        <div className="flex items-center justify-between">
+      {/* Wallet Identity Panel */}
+      <Card className="p-5">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-blue-500/20 rounded-xl border border-blue-400/30">
-              <Wallet size={24} className="text-blue-400" />
+            <div className="w-10 h-10 rounded-control bg-primary-soft text-primary flex items-center justify-center shrink-0">
+              <Wallet size={20} />
             </div>
             <div>
-              <p className="text-xs uppercase tracking-wider text-blue-200 font-semibold">
-                Self-Sovereign Identity DID
-              </p>
-              <h2 className="font-mono text-sm md:text-base font-bold text-gray-100">
-                {account ? `did:pkh:eip155:${chainId || 1337}:${account}` : 'No Wallet Connected'}
-              </h2>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted block">
+                Decentralized Identifier (DID)
+              </span>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="font-mono text-xs font-semibold text-foreground break-all">
+                  {account
+                    ? `did:pkh:eip155:${chainId || 31337}:${account}`
+                    : 'No Wallet Connected'}
+                </span>
+                {account && (
+                  <button
+                    onClick={copyDid}
+                    className="p-1 rounded text-foreground-muted hover:text-foreground hover:bg-surface-subtle transition-colors"
+                    title="Copy DID"
+                  >
+                    {copiedDid ? <Check size={13} className="text-status-success" /> : <Copy size={13} />}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
-          {account ? (
-            <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-semibold rounded-full flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              Vault Active
-            </span>
-          ) : (
-            <span className="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-semibold rounded-full">
-              Disconnected
-            </span>
-          )}
+
+          <div className="flex items-center gap-2 shrink-0">
+            {account ? (
+              <Badge variant="success" size="md" dot>
+                Vault Decrypted & Active
+              </Badge>
+            ) : (
+              <Badge variant="warning" size="md" dot>
+                Wallet Disconnected
+              </Badge>
+            )}
+          </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2 border-t border-white/10 text-xs">
-          <div>
-            <p className="text-gray-400">Total Credentials</p>
-            <p className="text-lg font-bold text-white">{credentials.length}</p>
+        {/* Metric Badges */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4">
+          <div className="p-3 bg-surface-subtle rounded-control border border-border-subtle">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted block">
+              Total Credentials
+            </span>
+            <span className="text-lg font-bold text-foreground mt-0.5 block">
+              {credentials.length}
+            </span>
           </div>
-          <div>
-            <p className="text-gray-400">Network Standard</p>
-            <p className="text-lg font-bold text-white">W3C VC 2.0</p>
+
+          <div className="p-3 bg-surface-subtle rounded-control border border-border-subtle">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted block">
+              Active Credentials
+            </span>
+            <span className="text-lg font-bold text-status-success mt-0.5 block">
+              {activeCount}
+            </span>
           </div>
-          <div>
-            <p className="text-gray-400">Signature Suite</p>
-            <p className="text-lg font-bold text-white">ecdsa-jcs-2019</p>
+
+          <div className="p-3 bg-surface-subtle rounded-control border border-border-subtle">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted block">
+              Revoked / Inactive
+            </span>
+            <span className="text-lg font-bold text-foreground-secondary mt-0.5 block">
+              {revokedCount}
+            </span>
           </div>
-          <div>
-            <p className="text-gray-400">Vault Privacy</p>
-            <p className="text-lg font-bold text-emerald-400">AES-256-GCM</p>
+
+          <div className="p-3 bg-surface-subtle rounded-control border border-border-subtle">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted block">
+              Vault Privacy Standard
+            </span>
+            <span className="text-xs font-semibold text-primary mt-1.5 block">
+              AES-256-GCM / PBKDF2
+            </span>
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* Main Content Area */}
       {!account ? (
-        <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center space-y-4">
-          <Shield size={48} className="mx-auto text-gray-400" />
-          <h3 className="text-lg font-bold text-gray-900">Connect Wallet to Unlock Vault</h3>
-          <p className="text-sm text-gray-500 max-w-md mx-auto">
-            Please connect your Ethereum wallet to authenticate and decrypt your verifiable credentials stored on DecentralID.
+        <Card className="p-12 text-center space-y-3">
+          <div className="w-12 h-12 rounded-full bg-surface-subtle border border-border flex items-center justify-center mx-auto text-foreground-muted">
+            <Shield size={24} />
+          </div>
+          <h3 className="text-base font-semibold text-foreground">
+            Connect Wallet to Unlock Vault
+          </h3>
+          <p className="text-xs text-foreground-secondary max-w-sm mx-auto leading-relaxed">
+            Please connect your Ethereum wallet to authenticate your identity and retrieve your verifiable credentials.
           </p>
-        </div>
+        </Card>
       ) : loading ? (
-        <div className="p-12 text-center text-gray-500 flex flex-col items-center gap-3">
-          <RefreshCw size={32} className="animate-spin text-blue-600" />
-          <p className="text-sm font-medium">Decrypting verifiable credentials from personal vault...</p>
+        <div className="p-12 text-center text-foreground-secondary flex flex-col items-center gap-3">
+          <RefreshCw size={24} className="animate-spin text-primary" />
+          <p className="text-xs font-medium">Retrieving verifiable credentials from holder registry...</p>
         </div>
       ) : credentials.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-dashed border-gray-300 p-12 text-center space-y-3">
-          <Award size={48} className="mx-auto text-gray-400" />
-          <h3 className="text-base font-bold text-gray-800">No Verifiable Credentials Found</h3>
-          <p className="text-xs text-gray-500 max-w-md mx-auto">
-            Credentials issued to <code className="bg-gray-100 px-1 py-0.5 rounded">{account}</code> by authorized institutions will appear here automatically.
+        <Card className="p-12 text-center space-y-3 border-dashed">
+          <div className="w-12 h-12 rounded-full bg-surface-subtle border border-border flex items-center justify-center mx-auto text-foreground-muted">
+            <Award size={24} />
+          </div>
+          <h3 className="text-base font-semibold text-foreground">
+            No Verifiable Credentials Found
+          </h3>
+          <p className="text-xs text-foreground-secondary max-w-md mx-auto leading-relaxed">
+            Credentials issued to <code className="bg-surface-subtle px-1.5 py-0.5 rounded font-mono text-foreground">{account}</code> by authorized institutions will appear here automatically.
           </p>
-        </div>
+        </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {credentials.map((cred) => {
             const isVerified = verificationResults[cred.id];
             return (
-              <div
+              <Card
                 key={cred.id}
-                className="bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition p-6 flex flex-col justify-between space-y-4"
+                className="flex flex-col justify-between hover:border-border-strong transition-all space-y-4"
               >
                 <div>
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <span className="px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-lg border border-blue-200/60">
+                      <Badge variant="primary" size="sm">
                         {cred.schema_type}
-                      </span>
-                      <h3 className="text-lg font-bold text-gray-900 mt-2">
+                      </Badge>
+                      <h3 className="text-base font-semibold text-foreground mt-2 tracking-tight">
                         {cred.claims.degree || cred.claims.title || cred.schema_type}
                       </h3>
-                      <p className="text-xs text-gray-500 mt-0.5">
+                      <p className="text-xs text-foreground-secondary mt-0.5">
                         {cred.claims.institutionName || cred.claims.organization || 'Accredited Institution'}
                       </p>
                     </div>
 
-                    <span
-                      className={`px-2.5 py-1 text-xs font-semibold rounded-full ${
+                    <Badge
+                      variant={
                         cred.status === 'ACTIVE'
-                          ? 'bg-green-100 text-green-800'
+                          ? 'success'
                           : cred.status === 'SUSPENDED'
-                          ? 'bg-amber-100 text-amber-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}
+                          ? 'warning'
+                          : 'danger'
+                      }
+                      size="sm"
+                      dot
                     >
                       {cred.status}
-                    </span>
+                    </Badge>
                   </div>
 
                   {/* Claims Snapshot */}
-                  <div className="mt-4 bg-gray-50 rounded-xl p-3 space-y-1.5 text-xs">
+                  <div className="mt-3.5 bg-surface-subtle rounded-control p-3 space-y-1.5 text-xs border border-border-subtle">
                     {Object.entries(cred.claims)
                       .slice(0, 3)
                       .map(([key, val]) => (
-                        <div key={key} className="flex justify-between">
-                          <span className="text-gray-500 font-medium capitalize">
+                        <div key={key} className="flex justify-between items-center text-xs">
+                          <span className="text-foreground-secondary capitalize">
                             {key.replace(/([A-Z])/g, ' $1')}:
                           </span>
-                          <span className="text-gray-900 font-semibold">{String(val)}</span>
+                          <span className="text-foreground font-medium truncate max-w-[180px]">
+                            {String(val)}
+                          </span>
                         </div>
                       ))}
                   </div>
 
-                  {/* Verification Check Pill */}
-                  <div className="mt-3 flex items-center justify-between text-xs">
-                    <span className="text-gray-400">Cryptographic Integrity:</span>
+                  {/* Cryptographic Proof Verification */}
+                  <div className="mt-3 flex items-center justify-between text-xs pt-2 border-t border-border-subtle">
+                    <span className="text-foreground-muted">Proof Integrity:</span>
                     {isVerified === true ? (
-                      <span className="text-emerald-600 font-semibold flex items-center gap-1">
-                        <CheckCircle size={14} /> Proof Verified
+                      <span className="text-status-success font-medium flex items-center gap-1 text-[11px]">
+                        <CheckCircle size={13} /> Verified On-Chain
                       </span>
                     ) : isVerified === false ? (
-                      <span className="text-red-600 font-semibold flex items-center gap-1">
-                        <AlertCircle size={14} /> Verification Failed
+                      <span className="text-status-danger font-medium flex items-center gap-1 text-[11px]">
+                        <AlertCircle size={13} /> Verification Failed
                       </span>
                     ) : (
                       <button
                         onClick={() => handleVerifyBeforeDisplay(cred)}
-                        className="text-blue-600 hover:underline font-semibold"
+                        className="text-primary hover:text-primary-hover font-medium text-[11px] hover:underline"
                       >
                         Verify Proof
                       </button>
@@ -363,273 +433,248 @@ export const WalletView: React.FC = () => {
                 </div>
 
                 {/* Actions */}
-                <div className="pt-4 border-t border-gray-100 flex items-center justify-between gap-2">
-                  <button
+                <div className="pt-3 border-t border-border flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => setSelectedCred(cred)}
-                    className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50 transition flex items-center justify-center gap-1.5"
+                    leftIcon={<Eye size={13} />}
+                    className="flex-1"
                   >
-                    <Eye size={14} /> View Details
-                  </button>
-                  <button
+                    View Details
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
                     onClick={() => startPresentation(cred)}
-                    className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition flex items-center justify-center gap-1.5"
+                    leftIcon={<Share2 size={13} />}
+                    className="flex-1"
                   >
-                    <Share2 size={14} /> Present / Share
-                  </button>
+                    Present / Share
+                  </Button>
                 </div>
-              </div>
+              </Card>
             );
           })}
         </div>
       )}
 
-      {/* Details Modal */}
+      {/* Credential Details Modal */}
       {selectedCred && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-6 shadow-2xl">
-            <div className="flex items-center justify-between pb-4 border-b border-gray-200">
-              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                <Shield size={20} className="text-blue-600" />
-                Verifiable Credential Document
-              </h3>
-              <button
-                onClick={() => setSelectedCred(null)}
-                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"
-              >
-                <X size={20} />
-              </button>
+        <Modal
+          isOpen={!!selectedCred}
+          onClose={() => setSelectedCred(null)}
+          title="Verifiable Credential Document"
+          description={`Issued to ${selectedCred.recipient_address.slice(0, 8)}...`}
+          maxWidth="xl"
+          footer={
+            <Button variant="outline" size="sm" onClick={() => setSelectedCred(null)}>
+              Close
+            </Button>
+          }
+        >
+          <div className="space-y-4 text-xs">
+            <div>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted block mb-1">
+                W3C Credential ID
+              </span>
+              <p className="font-mono bg-surface-subtle p-2 rounded-control border border-border text-foreground break-all">
+                {selectedCred.w3c_id}
+              </p>
             </div>
 
-            <div className="space-y-4 text-xs">
-              <div>
-                <p className="font-semibold text-gray-500">W3C Credential ID</p>
-                <p className="font-mono bg-gray-50 p-2 rounded border border-gray-200 text-gray-800 break-all">
-                  {selectedCred.w3c_id}
-                </p>
-              </div>
-
-              <div>
-                <p className="font-semibold text-gray-500">Salted Commitment Hash (Keccak256)</p>
-                <p className="font-mono bg-gray-50 p-2 rounded border border-gray-200 text-gray-800 break-all">
-                  {selectedCred.commitment}
-                </p>
-              </div>
-
-              <div>
-                <p className="font-semibold text-gray-500">Decrypted Subject Claims</p>
-                <pre className="bg-gray-900 text-emerald-400 p-3 rounded-xl overflow-x-auto text-[11px] font-mono">
-                  {JSON.stringify(selectedCred.claims, null, 2)}
-                </pre>
-              </div>
-
-              <div>
-                <p className="font-semibold text-gray-500">Complete Canonical W3C VC 2.0 Payload</p>
-                <pre className="bg-gray-900 text-blue-300 p-3 rounded-xl overflow-x-auto text-[11px] font-mono max-h-48">
-                  {JSON.stringify(selectedCred.w3c_document, null, 2)}
-                </pre>
-              </div>
+            <div>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted block mb-1">
+                Salted Commitment Hash (Keccak256)
+              </span>
+              <p className="font-mono bg-surface-subtle p-2 rounded-control border border-border text-foreground break-all">
+                {selectedCred.commitment}
+              </p>
             </div>
 
-            <div className="flex justify-end pt-4 border-t border-gray-200">
-              <button
-                onClick={() => setSelectedCred(null)}
-                className="px-4 py-2 bg-gray-100 text-gray-700 font-bold rounded-xl text-xs hover:bg-gray-200 transition"
-              >
-                Close
-              </button>
+            <div>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted block mb-1">
+                Decrypted Subject Claims
+              </span>
+              <pre className="bg-surface-subtle text-foreground p-3 rounded-control border border-border overflow-x-auto text-[11px] font-mono">
+                {JSON.stringify(selectedCred.claims, null, 2)}
+              </pre>
+            </div>
+
+            <div>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted block mb-1">
+                Canonical W3C VC 2.0 Payload
+              </span>
+              <pre className="bg-surface-subtle text-foreground-secondary p-3 rounded-control border border-border overflow-x-auto text-[11px] font-mono max-h-40">
+                {JSON.stringify(selectedCred.w3c_document, null, 2)}
+              </pre>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Selective Disclosure & Presentation Modal */}
       {presentingCred && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-6 shadow-2xl">
-            <div className="flex items-center justify-between pb-4 border-b border-gray-200">
-              <div className="flex items-center gap-2">
-                <Sliders size={20} className="text-blue-600" />
-                <h3 className="text-lg font-bold text-gray-900">
-                  Selective Disclosure Presentation
-                </h3>
-              </div>
-              <button
-                onClick={() => setPresentingCred(null)}
-                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {!generatedVP ? (
-              <div className="space-y-4">
-                <p className="text-xs text-gray-600">
-                  Select which attributes to disclose to the verifier. Unchecked attributes will remain masked and protected from disclosure.
-                </p>
-
-                <div className="space-y-2 border border-gray-200 rounded-xl p-4 bg-gray-50">
-                  <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
-                    Claims Disclosure Matrix
-                  </p>
-                  {Object.entries(presentingCred.claims).map(([key, value]) => (
-                    <label
-                      key={key}
-                      className="flex items-center justify-between p-2 rounded-lg hover:bg-white transition cursor-pointer border border-transparent hover:border-gray-200"
-                    >
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="checkbox"
-                          checked={disclosedKeys[key] || false}
-                          onChange={(e) =>
-                            setDisclosedKeys((prev) => ({
-                              ...prev,
-                              [key]: e.target.checked,
-                            }))
-                          }
-                          className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                        />
-                        <span className="text-xs font-medium text-gray-800 capitalize">
-                          {key.replace(/([A-Z])/g, ' $1')}
-                        </span>
-                      </div>
-                      <span className="text-xs text-gray-500 font-mono">
-                        {disclosedKeys[key] ? String(value) : '•••• (Hidden)'}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-
-                <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-                  <button
-                    onClick={() => setPresentingCred(null)}
-                    className="px-4 py-2 border border-gray-300 text-gray-700 font-bold rounded-xl text-xs hover:bg-gray-50 transition"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={submitPresentation}
-                    className="px-4 py-2 bg-blue-600 text-white font-bold rounded-xl text-xs hover:bg-blue-700 transition flex items-center gap-1.5"
-                  >
-                    <Share2 size={14} /> Generate Verifiable Presentation
-                  </button>
-                </div>
-              </div>
+        <Modal
+          isOpen={!!presentingCred}
+          onClose={() => setPresentingCred(null)}
+          title="Selective Disclosure Presentation"
+          description="Choose which attributes to disclose. Unchecked claims will remain cryptographically masked."
+          maxWidth="lg"
+          footer={
+            !generatedVP ? (
+              <>
+                <Button variant="outline" size="sm" onClick={() => setPresentingCred(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={submitPresentation}
+                  leftIcon={<Share2 size={13} />}
+                >
+                  Generate Presentation
+                </Button>
+              </>
             ) : (
-              <div className="space-y-4 text-xs">
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center gap-3 text-emerald-800">
-                  <CheckCircle size={24} className="text-emerald-600 flex-shrink-0" />
-                  <div>
-                    <p className="font-bold">Verifiable Presentation Ready!</p>
-                    <p className="text-[11px] text-emerald-700 mt-0.5">
-                      An opaque presentation token has been created. Verifiers can scan this QR code or access the presentation link without exposing undisclosed PII.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Presentation Token & Share Link */}
-                <div className="space-y-2">
-                  <label className="font-bold text-gray-700">Presentation Share Link</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      readOnly
-                      value={`${window.location.origin}/verify?token=${generatedVP.token}`}
-                      className="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2 text-xs font-mono text-gray-800"
-                    />
-                    <button
-                      onClick={() =>
-                        copyToClipboard(`${window.location.origin}/verify?token=${generatedVP.token}`)
-                      }
-                      className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold flex items-center gap-1 transition"
-                    >
-                      {copiedToken ? <Check size={14} className="text-green-600" /> : <Copy size={14} />}
-                      {copiedToken ? 'Copied' : 'Copy'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Simulated Opaque QR Code Container */}
-                <div className="border border-gray-200 rounded-xl p-6 text-center space-y-3 bg-gray-50 flex flex-col items-center">
-                  <div className="p-4 bg-white rounded-2xl shadow-sm border border-gray-200">
-                    <QrCode size={120} className="text-gray-900" />
-                  </div>
-                  <p className="text-[11px] text-gray-500 font-mono">
-                    Token: {generatedVP.token.slice(0, 16)}...
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  setGeneratedVP(null);
+                  setPresentingCred(null);
+                }}
+              >
+                Done
+              </Button>
+            )
+          }
+        >
+          {!generatedVP ? (
+            <div className="space-y-3">
+              <div className="border border-border rounded-control p-3 bg-surface-subtle space-y-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted block mb-1">
+                  Claims Disclosure Matrix
+                </span>
+                {Object.entries(presentingCred.claims).map(([key, value]) => (
+                  <label
+                    key={key}
+                    className="flex items-center justify-between p-2 rounded-control hover:bg-surface transition-colors cursor-pointer border border-transparent hover:border-border"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={disclosedKeys[key] || false}
+                        onChange={(e) =>
+                          setDisclosedKeys((prev) => ({
+                            ...prev,
+                            [key]: e.target.checked,
+                          }))
+                        }
+                        className="w-4 h-4 text-primary rounded border-border focus:ring-primary/20 accent-primary"
+                      />
+                      <span className="text-xs font-medium text-foreground capitalize">
+                        {key.replace(/([A-Z])/g, ' $1')}
+                      </span>
+                    </div>
+                    <span className="text-xs text-foreground-secondary font-mono">
+                      {disclosedKeys[key] ? String(value) : '•••• (Hidden)'}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4 text-xs">
+              <div className="p-3.5 rounded-control bg-status-success-soft border border-status-success/30 text-status-success flex items-start gap-2.5">
+                <CheckCircle size={18} className="shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-semibold block">Verifiable Presentation Ready</span>
+                  <p className="text-[11px] text-foreground-secondary mt-0.5">
+                    An opaque presentation token has been created. Verifiers can scan this QR code or access the presentation link without exposing undisclosed PII.
                   </p>
                 </div>
+              </div>
 
-                <div className="flex justify-end pt-4 border-t border-gray-200">
-                  <button
-                    onClick={() => {
-                      setGeneratedVP(null);
-                      setPresentingCred(null);
-                    }}
-                    className="px-4 py-2 bg-blue-600 text-white font-bold rounded-xl text-xs hover:bg-blue-700 transition"
+              {/* Share Link */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">
+                  Verification Share Link
+                </label>
+                <div className="flex gap-2">
+                  <Input
+                    readOnly
+                    value={`${window.location.origin}/?token=${generatedVP.token}`}
+                    className="font-mono text-xs flex-1"
+                  />
+                  <Button
+                    variant="outline"
+                    size="md"
+                    onClick={() =>
+                      copyToClipboard(`${window.location.origin}/?token=${generatedVP.token}`)
+                    }
+                    leftIcon={copiedToken ? <Check size={14} className="text-status-success" /> : <Copy size={14} />}
                   >
-                    Done
-                  </button>
+                    {copiedToken ? 'Copied' : 'Copy'}
+                  </Button>
                 </div>
               </div>
-            )}
-          </div>
-        </div>
+
+              {/* QR Code Presentation Box */}
+              <div className="border border-border rounded-control p-5 text-center bg-surface-subtle flex flex-col items-center">
+                <div className="p-3 bg-surface rounded-control border border-border shadow-subtle mb-2">
+                  <QrCode size={110} className="text-foreground" />
+                </div>
+                <span className="text-[10px] font-mono text-foreground-muted">
+                  Token: {generatedVP.token.slice(0, 18)}...
+                </span>
+              </div>
+            </div>
+          )}
+        </Modal>
       )}
 
       {/* Encrypted Vault Modal */}
       {showVaultModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-200">
-              <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                <Lock size={18} className="text-blue-600" />
-                Client-Side Encrypted Vault Backup
-              </h3>
-              <button
-                onClick={() => setShowVaultModal(false)}
-                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"
+        <Modal
+          isOpen={showVaultModal}
+          onClose={() => setShowVaultModal(false)}
+          title="Client-Side Encrypted Vault Backup"
+          description="Encrypt your entire verifiable credential store using client-side AES-256-GCM. Your passphrase never leaves this browser."
+          maxWidth="md"
+          footer={
+            <>
+              <Button variant="outline" size="sm" onClick={() => setShowVaultModal(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={exportEncryptedVault}
+                leftIcon={<Download size={13} />}
               >
-                <X size={18} />
-              </button>
-            </div>
-
-            <p className="text-xs text-gray-600">
-              Encrypt your entire verifiable credential store using client-side AES-256-GCM.
-              Your password never leaves this browser.
-            </p>
-
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-gray-700">Master Vault Password</label>
-              <input
-                type="password"
-                placeholder="Enter strong encryption password"
-                value={vaultPassword}
-                onChange={(e) => setVaultPassword(e.target.value)}
-                className="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+                Export Encrypted Vault
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-3">
+            <Input
+              type="password"
+              label="Master Vault Passphrase"
+              placeholder="Enter strong encryption passphrase (min 8 chars)"
+              value={vaultPassword}
+              onChange={(e) => setVaultPassword(e.target.value)}
+              helperText="PBKDF2 (100,000 iterations) + AES-256-GCM authenticated encryption."
+            />
 
             {vaultStatus && (
-              <p className="text-xs font-semibold text-blue-600 bg-blue-50 p-2.5 rounded-lg border border-blue-200">
+              <p className="text-xs font-medium text-primary bg-primary-soft p-2.5 rounded-control border border-primary/20">
                 {vaultStatus}
               </p>
             )}
-
-            <div className="flex justify-end gap-3 pt-3 border-t border-gray-200">
-              <button
-                onClick={() => setShowVaultModal(false)}
-                className="px-4 py-2 border border-gray-300 text-gray-700 font-bold rounded-xl text-xs hover:bg-gray-50 transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={exportEncryptedVault}
-                className="px-4 py-2 bg-blue-600 text-white font-bold rounded-xl text-xs hover:bg-blue-700 transition flex items-center gap-1.5"
-              >
-                <Download size={14} /> Export Encrypted Vault
-              </button>
-            </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
